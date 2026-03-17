@@ -28,16 +28,16 @@ def step():
 def key_callback(keycode):
     print(f"Key pressed: {keycode}")
     if keycode == 265:  # Use up arrow key to increase throttle
-        d.ctrl[0] += 0.1  # Increase throttle control signal
+        d.ctrl[1] += 0.1  # Increase throttle control signal
     elif keycode == 264:  # Use down arrow key to decrease throttle
-        d.ctrl[0] -= 0.1  # Decrease throttle control signal
+        d.ctrl[1] -= 0.1  # Decrease throttle control signal
     elif keycode == 262:  # Use right arrow key to increase steering angle
-        pass
-        d.ctrl[1] += 0.1  # Increase steering control signal
+        # pass
+        d.ctrl[0] += 1  # Increase steering control signal
     elif keycode == 263:  # Use left arrow key to decrease steering angle
-        pass
-        d.ctrl[1] -= 0.1  # Decrease steering control signal
-    print(f"Control signals: throttle={d.ctrl[0]}")   
+        # pass
+        d.ctrl[0] -= 1  # Decrease steering control signal
+    print(f"Control signals: throttle={d.ctrl[1]}, steering={d.ctrl[0]}")
 
 with mujoco.viewer.launch_passive(m, d, key_callback=key_callback) as viewer:
     while viewer.is_running():

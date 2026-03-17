@@ -3,45 +3,93 @@
 
   <default>
     <geom contype="1" conaffinity="1" condim="3"/>
+    <!-- Edgar steering range from vehicle_parameters_edgar.yaml -->
+    <default class="steering">
+      <joint type="hinge" axis="0 0 1" limited="true"
+             frictionloss="1.0" damping="5.0" armature="0.1"
+             range="-0.610865 0.610865"/>
+    </default>
+    <default class="throttle">
+      <joint type="hinge" axis="0 1 0"
+             frictionloss="1.0" damping="1.0" armature="1.0" limited="false"/>
+    </default>
   </default>
 
   <worldbody>
-    <!-- <light pos="0 0 5" dir="0 0 -1"/>
-    <geom name="ground" type="plane" size="20 20 0.1" friction="1.0 0.05 0.05" rgba="0.7 0.7 0.7 1"/> -->
-
-    <!-- Edgar dimensions (m): length=4.973, width=1.941, height=2.320 -->
-    <!-- Chassis origin is at vehicle CG; wheels placed using a/b and track -->
+    <!-- Edgar dimensions (m): length=4.973, width=1.941, height=2.320        -->
+    <!-- CG height = wheel_radius(0.33) + chassis_half_height(1.16) = 1.49 m  -->
+    <!-- a=1.484 (CG to front axle), b=1.644 (CG to rear axle)                -->
+    <!-- T_f=1.645 m -> half-track = 0.8225 m                                 -->
     <body name="chassis" pos="0 0 1.49">
       <freejoint name="root"/>
-      <geom name="chassis" type="box" size="2.4865 0.9705 1.16" mass="2520" rgba="0.2 0.4 0.8 1"/>
+      <site name="imu" pos="0 0 0"/>
+      <geom name="chassis" type="box" size="2.4865 0.9705 1.16"
+            mass="2520" rgba="0.2 0.4 0.8 1"/>
 
-      <!-- wheelbase: a=1.484 (front), b=1.644 (rear); track: T_f=1.645 -->
-      <!-- wheel radius=0.33, width=0.15 (update if you know R_w) -->
-      <body name="steer" pos="1.484 0 -1.16">
-        <inertial pos="0 0 0" mass="0.1" diaginertia="0.001 0.001 0.001"/>
-        <!-- <joint name="steer_yaw" type="hinge" axis="0 0 1" range="-0.610865 0.610865"/> -->
-        <body name="wheel_fl" pos="0 0.8225 0">
-          <joint name="fl_spin" type="hinge" axis="0 1 0"/>
-          <geom type="cylinder" size="0.33 0.15" euler="90 0 0" mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
-        </body>
-        <body name="wheel_fr" pos="0 -0.8225 0">
-          <joint name="fr_spin" type="hinge" axis="0 1 0"/>
-          <geom type="cylinder" size="0.33 0.15" euler="90 0 0" mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
-        </body>
+      <!-- Virtual bicycle-model steering reference at front axle centre.      -->
+      <!-- Controlled by the steering actuator; fl/fr are slaved via Ackermann -->
+      <body name="steering_wheel" pos="1.484 0 -1.16">
+        <joint class="steering" name="steering_wheel"/>
+        <geom type="cylinder" size="0.01 0.01" mass="0.01"
+              rgba="0 0 0 0" contype="0" conaffinity="0"/>
       </body>
+
+      <!-- Front-left wheel -->
+      <body name="wheel_fl" pos="1.484 0.8225 -1.16">
+        <joint class="steering" name="wheel_fl_steering"/>
+        <joint class="throttle" name="fl_spin"/>
+        <geom type="cylinder" size="0.33 0.15" euler="90 0 0"
+              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+      </body>
+
+      <!-- Front-right wheel -->
+      <body name="wheel_fr" pos="1.484 -0.8225 -1.16">
+        <joint class="steering" name="wheel_fr_steering"/>
+        <joint class="throttle" name="fr_spin"/>
+        <geom type="cylinder" size="0.33 0.15" euler="90 0 0"
+              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+      </body>
+
+      <!-- Rear-left wheel -->
       <body name="wheel_rl" pos="-1.644 0.8225 -1.16">
-        <joint name="rl_spin" type="hinge" axis="0 1 0"/>
-        <geom type="cylinder" size="0.33 0.15" euler="90 0 0" mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+        <joint class="throttle" name="rl_spin"/>
+        <geom type="cylinder" size="0.33 0.15" euler="90 0 0"
+              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
       </body>
+
+      <!-- Rear-right wheel -->
       <body name="wheel_rr" pos="-1.644 -0.8225 -1.16">
-        <joint name="rr_spin" type="hinge" axis="0 1 0"/>
-        <geom type="cylinder" size="0.33 0.15" euler="90 0 0" mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+        <joint class="throttle" name="rr_spin"/>
+        <geom type="cylinder" size="0.33 0.15" euler="90 0 0"
+              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
       </body>
     </body>
   </worldbody>
 
+  <actuator>
+    <!-- Position-controlled steering drives the virtual bicycle-model wheel   -->
+    <!-- gear = 1/0.610865 ≈ 1.6366: equilibrium is ctrl = gear*q,             -->
+    <!-- so ctrl=1 → q=0.610865 rad (35°), ctrl=-1 → q=-0.610865 rad (-35°)  -->
+    <position name="steering" joint="steering_wheel" kp="5000"  ctrlrange="-35 35"/>
+    <!-- Velocity-independent throttle coupled equally to all four wheels      -->
+    <motor name="throttle" tendon="throttle_all" gear="1000"
+           ctrllimited="true" ctrlrange="-1 1"/>
+  </actuator>
+
+  <equality>
+    <!-- Ackermann steering (Taylor expansion of exact geometry around δ=0)
+         L = a+b = 3.128 m,  W/2 = T_f/2 = 0.8225 m,  s = (W/2)/L = 0.26295
+
+         δ_l = arctan( L·tan(δ) / (L − (W/2)·tan(δ)) )
+         Coefficients: p1=1  p2=s  p3=s²  p4=s³−s/3                          -->
+    <joint joint1="wheel_fl_steering" joint2="steering_wheel" polycoef="0 -1 0 0"/>
+
+    <!-- δ_r = arctan( L·tan(δ) / (L + (W/2)·tan(δ)) )
+         Coefficients: p1=1  p2=−s  p3=s²  p4=−(s³−s/3)                      -->
+    <joint joint1="wheel_fr_steering" joint2="steering_wheel" polycoef="0 -1 0 0"/>
+  </equality>
+
   <tendon>
-    <!-- One throttle signal applied equally to all wheel spin joints -->
     <fixed name="throttle_all">
       <joint joint="fl_spin" coef="0.25"/>
       <joint joint="fr_spin" coef="0.25"/>
@@ -50,8 +98,9 @@
     </fixed>
   </tendon>
 
-  <actuator>
-    <!-- Single speed control for all wheels (-1..1) -->
-    <motor name="throttle" tendon="throttle_all" gear="200" ctrllimited="true" ctrlrange="-1 1"/>
-  </actuator>
+  <sensor>
+    <gyro          name="gyro"          site="imu"/>
+    <velocimeter   name="velocimeter"   site="imu"/>
+    <accelerometer name="accelerometer" site="imu"/>
+  </sensor>
 </mujoco>
