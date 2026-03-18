@@ -29,44 +29,43 @@
       <!-- Reference marker at roof height (2.32m above ground = 0.987m above CG) -->
       <site name="roof_ref" pos="0 0 0.987" size="0.05" rgba="1 0 0 1"/>
       <geom name="chassis" type="box" size="2.4865 0.9705 0.987"
-            mass="2520" rgba="0.2 0.4 0.8 1"/>
+            mass="2400" rgba="0.2 0.4 0.8 1"/>
 
       <!-- Virtual bicycle-model steering reference at front axle centre.      -->
       <!-- Controlled by the steering actuator; fl/fr are slaved via Ackermann -->
       <body name="steering_wheel" pos="1.484 0 -0.987">
         <joint class="steering" name="steering_wheel"/>
-        <geom type="cylinder" size="0.01 0.01" mass="0.01"
-              rgba="0 0 0 0" contype="0" conaffinity="0"/>
+        <geom type="cylinder" size="0.01 0.01" mass="0.01" rgba="0 0 0 0" contype="0" conaffinity="0"/>
       </body>
 
       <!-- Front-left wheel -->
       <body name="wheel_fl" pos="1.484 0.8225 -0.987">
         <joint class="steering" name="wheel_fl_steering"/>
         <joint class="throttle" name="fl_spin"/>
-        <geom type="cylinder" size="0.346 0.15" euler="90 0 0"
-              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+        <geom type="cylinder" size="0.346 0.15" euler="90 0 0" mass="30"
+              friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
       </body>
 
       <!-- Front-right wheel -->
       <body name="wheel_fr" pos="1.484 -0.8225 -0.987">
         <joint class="steering" name="wheel_fr_steering"/>
         <joint class="throttle" name="fr_spin"/>
-        <geom type="cylinder" size="0.346 0.15" euler="90 0 0"
-              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+        <geom type="cylinder" size="0.346 0.15" euler="90 0 0" mass="30"
+              friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
       </body>
 
       <!-- Rear-left wheel -->
       <body name="wheel_rl" pos="-1.644 0.8225 -0.987">
         <joint class="throttle" name="rl_spin"/>
-        <geom type="cylinder" size="0.346 0.15" euler="90 0 0"
-              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+        <geom type="cylinder" size="0.346 0.15" euler="90 0 0" mass="30"
+              friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
       </body>
 
       <!-- Rear-right wheel -->
       <body name="wheel_rr" pos="-1.644 -0.8225 -0.987">
         <joint class="throttle" name="rr_spin"/>
-        <geom type="cylinder" size="0.346 0.15" euler="90 0 0"
-              mass="40" friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
+        <geom type="cylinder" size="0.346 0.15" euler="90 0 0" mass="30"
+              friction="1.5 0.05 0.05" rgba="0.1 0.1 0.1 1"/>
       </body>
     </body>
   </worldbody>
@@ -75,7 +74,7 @@
     <!-- Position-controlled steering drives the virtual bicycle-model wheel   -->
    <position name="steering" joint="steering_wheel" kp="5000"  ctrlrange="-35 35"/>
     <!-- Velocity-independent throttle coupled equally to all four wheels      -->
-    <motor name="throttle" tendon="throttle_all" gear="1000"
+    <motor name="throttle" tendon="throttle_all" gear="2520"
            ctrllimited="true" ctrlrange="-1 1"/>
   </actuator>
 

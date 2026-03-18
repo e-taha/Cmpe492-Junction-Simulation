@@ -25,7 +25,7 @@ MODEL_PATH = Path(__file__).parent.parent / "models" / "simple_car.xml"
 # Source: edgar_digital_twin / vehicle_parameters_edgar.yaml + XML comments.
 # Update these values if the official EDGAR README gives different numbers.
 REF = {
-    "total_mass_kg":        2680.0,    # chassis 2520 + 4 × 40 kg wheels
+    "total_mass_kg":        2520.0,    # chassis 2400 + 4 × 30 kg wheels (tire+rim+brake est.)
     "cg_z_m":               1.333,     # wheel_radius(0.346) + chassis_half_h(0.987)
     "cg_to_front_axle_m":   1.484,     # a
     "cg_to_rear_axle_m":    1.644,     # b

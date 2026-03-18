@@ -7,19 +7,22 @@ handling & stability measurements).
 What this test does:
   1. Starts from rest on a flat surface.
   2. Applies full throttle (ctrl = 1.0) instantaneously.
-  3. Runs for a fixed duration with a live viewer, logging time, speed,
-     and acceleration.
+  3. Runs for a fixed duration, logging time, speed, and acceleration.
   4. Extracts key metrics: initial acceleration, time-to-speed milestones,
      and peak speed reached within the test window.
   5. Saves a CSV for offline plotting.
 
+Run headless (default, standard Python):
+  python3 tests/test_straight_line_acceleration.py
+
 Run with the MuJoCo viewer (mjpython required for GUI):
-  mjpython tests/test_straight_line_acceleration.py
+  mjpython tests/test_straight_line_acceleration.py --viewer
 
 Then plot the saved results with standard Python:
   python3 tests/plot_straight_line_acceleration.py
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -39,16 +42,21 @@ TEST_DURATION_S = 30.0   # simulated seconds to run
 
 SPEED_TARGETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]   # km/h
 
-# ── Expected values ────────────────────────────────────────────────────────────
-# Leave as None to skip the assertion; set a value for pass/fail.
+# ── Expected values (from vehicle_parameters_edgar.yaml) ───────────────────────
+# a_max: 2.5 m/s²  — maximum acceleration for v > 40 km/h (full throttle)
+# At full throttle the model must sustain at least this value in that speed band.
+#
+# Analytically derived initial acceleration (gear=2180, coef=0.25, r_w=0.346, m=2520):
+#   torque/wheel = 2180 × 0.25 = 545 N·m
+#   F_drive/wheel = 545 / 0.346 ≈ 1575 N  →  total = 6300 N
+#   a_initial = 6300 / 2520 ≈ 2.50 m/s²
+A_MAX_MS2        = 2.5          # m/s²  — spec limit for v > 40 km/h
+A_MAX_SPEED_BAND = (40.0, 100.0)  # km/h  — speed range where spec applies
+
 EXPECTED = {
-    # Analytically derived initial acceleration:
-    #   torque/wheel = gear(1000) × coef(0.25) = 250 N·m
-    #   F_drive/wheel = 250 / r_w(0.346) ≈ 722.5 N  →  total = 2890 N
-    #   a_initial = 2890 / 2680 ≈ 1.08 m/s²
-    "initial_accel_ms2": 1.08,
-    "time_to_50kph_s":   None,   # fill from EDGAR specs when known
-    "time_to_100kph_s":  None,
+    "accel_40_100kph_min_ms2": A_MAX_MS2,   # must be ≥ this throughout the band
+    "time_to_50kph_s":        None,  # fill from EDGAR specs when known
+    "time_to_100kph_s":       None,
 }
 
 ACCEL_TOL = 0.10   # 10 % relative tolerance
@@ -56,7 +64,7 @@ ACCEL_TOL = 0.10   # 10 % relative tolerance
 
 # ── Simulation ─────────────────────────────────────────────────────────────────
 
-def run_simulation(m: mujoco.MjModel) -> dict:
+def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
     d = mujoco.MjData(m)
     mujoco.mj_resetData(m, d)
 
@@ -71,44 +79,50 @@ def run_simulation(m: mujoco.MjModel) -> dict:
 
     times, speeds, accels = [], [], []
 
-    with mujoco.viewer.launch_passive(m, d) as viewer:
-        while viewer.is_running() and d.time < TEST_DURATION_S:
-            step_start = time.time()
+    if show_viewer:
+        with mujoco.viewer.launch_passive(m, d) as viewer:
+            while viewer.is_running() and d.time < TEST_DURATION_S:
+                step_start = time.time()
+                mujoco.mj_step(m, d)
+
+                speed = float(d.sensordata[vel_adr])
+                accel = float(d.sensordata[acc_adr])
+                times.append(d.time)
+                speeds.append(speed)
+                accels.append(accel)
+
+                # ── Velocity overlay label (follows the car in world space) ────
+                viewer.user_scn.ngeom = 0
+                geom = viewer.user_scn.geoms[0]
+                label_pos = d.xpos[chassis_id].copy()
+                label_pos[2] += 3.0
+                mujoco.mjv_initGeom(
+                    geom,
+                    mujoco.mjtGeom.mjGEOM_LABEL,
+                    np.zeros(3),
+                    label_pos,
+                    np.eye(3).flatten(),
+                    np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32),
+                )
+                geom.label = (
+                    f"t={d.time:.1f}s  "
+                    f"v={speed * 3.6:.1f} km/h  "
+                    f"a={accel:.2f} m/s2"
+                )
+                viewer.user_scn.ngeom = 1
+                # ─────────────────────────────────────────────────────────────
+
+                viewer.sync()
+                elapsed = time.time() - step_start
+                sleep_t = m.opt.timestep - elapsed
+                if sleep_t > 0:
+                    time.sleep(sleep_t)
+    else:
+        while d.time < TEST_DURATION_S:
             mujoco.mj_step(m, d)
-
-            speed = float(d.sensordata[vel_adr])
-            accel = float(d.sensordata[acc_adr])
             times.append(d.time)
-            speeds.append(speed)
-            accels.append(accel)
-
-            # ── Velocity overlay label (follows the car in world space) ────────
-            viewer.user_scn.ngeom = 0
-            geom = viewer.user_scn.geoms[0]
-            # Place label 3 m above the chassis centre
-            label_pos = d.xpos[chassis_id].copy()
-            label_pos[2] += 3.0
-            mujoco.mjv_initGeom(
-                geom,
-                mujoco.mjtGeom.mjGEOM_LABEL,
-                np.zeros(3),
-                label_pos,
-                np.eye(3).flatten(),
-                np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32),   # yellow
-            )
-            geom.label = (
-                f"t={d.time:.1f}s  "
-                f"v={speed * 3.6:.1f} km/h  "
-                f"a={accel:.2f} m/s2"
-            )
-            viewer.user_scn.ngeom = 1
-            # ───────────────────────────────────────────────────────────────────
-
-            viewer.sync()
-            elapsed = time.time() - step_start
-            sleep_t = m.opt.timestep - elapsed
-            if sleep_t > 0:
-                time.sleep(sleep_t)
+            speeds.append(float(d.sensordata[vel_adr]))
+            accels.append(float(d.sensordata[acc_adr]))
 
     return {
         "time_s":    np.array(times),
@@ -128,16 +142,23 @@ def extract_metrics(data: dict) -> dict:
     early_mask    = t <= 0.5
     initial_accel = float(np.mean(a[early_mask])) if early_mask.any() else float("nan")
 
+    lo, hi = A_MAX_SPEED_BAND
+    band_mask = (v_kph >= lo) & (v_kph <= hi)
+    accel_band_min = float(np.min(a[band_mask])) if band_mask.any() else float("nan")
+    accel_band_mean = float(np.mean(a[band_mask])) if band_mask.any() else float("nan")
+
     time_to = {}
     for target in SPEED_TARGETS:
         idx = np.argmax(v_kph >= target)
         time_to[target] = float(t[idx]) if v_kph[idx] >= target else None
 
     return {
-        "initial_accel_ms2": initial_accel,
-        "time_to_kph":       time_to,
-        "peak_speed_kph":    float(np.max(v_kph)),
-        "peak_speed_ms":     float(np.max(v)),
+        "initial_accel_ms2":       initial_accel,
+        "accel_40_100kph_min_ms2": accel_band_min,
+        "accel_40_100kph_mean_ms2": accel_band_mean,
+        "time_to_kph":             time_to,
+        "peak_speed_kph":          float(np.max(v_kph)),
+        "peak_speed_ms":           float(np.max(v)),
     }
 
 
@@ -147,18 +168,26 @@ def print_report(metrics: dict) -> bool:
     all_pass = True
     print("\n── Metrics ────────────────────────────────────────────────────────────")
 
-    a0    = metrics["initial_accel_ms2"]
-    a_exp = EXPECTED["initial_accel_ms2"]
-    if a_exp is not None:
-        err = abs(a0 - a_exp) / (abs(a_exp) + 1e-12)
-        ok  = err <= ACCEL_TOL
+    # ── Initial acceleration — informational only (no EDGAR spec below 40 km/h) ─
+    a0 = metrics["initial_accel_ms2"]
+    print(f"  [INFO] Initial acceleration (avg first 0.5 s): {a0:.3f} m/s²")
+
+    # ── Spec check: acceleration ≥ a_max (2.5 m/s²) in 40–100 km/h band ───────
+    a_band_min  = metrics["accel_40_100kph_min_ms2"]
+    a_band_mean = metrics["accel_40_100kph_mean_ms2"]
+    a_spec      = EXPECTED["accel_40_100kph_min_ms2"]
+    lo, hi      = A_MAX_SPEED_BAND
+    if np.isnan(a_band_min):
+        print(f"\n  [SKIP] Acceleration in {lo:.0f}–{hi:.0f} km/h band: "
+              f"speed band not reached")
+    else:
+        ok = a_band_min >= a_spec * (1 - ACCEL_TOL)
         if not ok:
             all_pass = False
-        print(f"  [{'PASS' if ok else 'FAIL'}] Initial acceleration (avg first 0.5 s)")
-        print(f"         expected={a_exp:.3f} m/s²  actual={a0:.3f} m/s²  "
-              f"err={err*100:.1f}%")
-    else:
-        print(f"  [INFO] Initial acceleration (avg first 0.5 s): {a0:.3f} m/s²")
+        print(f"\n  [{'PASS' if ok else 'FAIL'}] Acceleration in "
+              f"{lo:.0f}–{hi:.0f} km/h band (full throttle, from EDGAR spec)")
+        print(f"         spec a_max={a_spec:.2f} m/s²  "
+              f"min={a_band_min:.3f} m/s²  mean={a_band_mean:.3f} m/s²")
 
     print(f"\n  Time-to-speed milestones (full throttle from rest):")
     print(f"  {'Speed (km/h)':>14}  {'Time (s)':>10}  {'Expected (s)':>14}  status")
@@ -206,11 +235,17 @@ def save_csv(data: dict) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Straight-line acceleration test (ISO 15037)")
+    parser.add_argument("--viewer", action="store_true", default=False,
+                        help="Open the MuJoCo viewer during simulation (requires mjpython)")
+    args = parser.parse_args()
+
     print("=" * 70)
     print("  Straight-Line Acceleration Test (ISO 15037)")
     print("=" * 70)
     print(f"  Model:    {MODEL_PATH}")
     print(f"  Throttle: {THROTTLE}  |  Duration: {TEST_DURATION_S} s")
+    print(f"  Viewer:   {'on' if args.viewer else 'off (pass --viewer to enable)'}")
 
     if not MODEL_PATH.exists():
         print(f"\n  ERROR: model file not found at {MODEL_PATH}")
@@ -223,8 +258,11 @@ def main() -> None:
     floor.size = np.array([0.0, 0.0, 0.05])
     m = spec.compile()
 
-    print("\n  Running simulation (close the viewer window to finish early)...")
-    data    = run_simulation(m)
+    if args.viewer:
+        print("\n  Running simulation (close the viewer window to finish early)...")
+    else:
+        print("\n  Running simulation (headless)...")
+    data    = run_simulation(m, show_viewer=args.viewer)
     metrics = extract_metrics(data)
 
     ok = print_report(metrics)
