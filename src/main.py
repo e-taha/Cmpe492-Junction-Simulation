@@ -14,6 +14,12 @@ paused = False
 m = scene_spec.compile()
 d  = mujoco.MjData(m)
 
+vel_id     = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR, "robot-velocimeter")
+acc_id     = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR, "robot-accelerometer")
+chassis_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY,   "robot-chassis")
+vel_adr    = int(m.sensor_adr[vel_id])
+acc_adr    = int(m.sensor_adr[acc_id])
+
 # Pressing SPACE key toggles the paused state.
 def mujoco_viewer_callback(keycode):
     global paused
@@ -22,6 +28,29 @@ def mujoco_viewer_callback(keycode):
 
 def step():
     mujoco.mj_step(m, d)
+
+    speed = float(d.sensordata[vel_adr])
+    accel = float(d.sensordata[acc_adr])
+
+    viewer.user_scn.ngeom = 0
+    geom = viewer.user_scn.geoms[0]
+    label_pos = d.xpos[chassis_id].copy()
+    label_pos[2] += 3.0
+    mujoco.mjv_initGeom(
+        geom,
+        mujoco.mjtGeom.mjGEOM_LABEL,
+        np.zeros(3),
+        label_pos,
+        np.eye(3).flatten(),
+        np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32),
+    )
+    geom.label = (
+        f"t={d.time:.1f}s  "
+        f"v={speed * 3.6:.1f} km/h  "
+        f"a={accel:.2f} m/s2"
+    )
+    viewer.user_scn.ngeom = 1
+
     viewer.sync()
     time.sleep(m.opt.timestep)
 
