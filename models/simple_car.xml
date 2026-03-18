@@ -75,7 +75,11 @@
    <position name="steering" joint="steering_wheel" kp="5000"  ctrlrange="-35 35"/>
     <!-- Velocity-independent throttle coupled equally to all four wheels      -->
     <motor name="throttle" tendon="throttle_all" gear="2520"
-           ctrllimited="true" ctrlrange="-1 1"/>
+           ctrllimited="true" ctrlrange="0 1"/>
+    <!-- Velocity-proportional brake: f = -kv × ctrl × tendon_vel             -->
+    <!-- kv=95 → 3.5 m/s² deceleration at 40 km/h (EDGAR a_min spec)          -->
+    <!-- Force → 0 as v → 0, so vehicle cannot reverse under braking            -->
+    <damper name="brake" tendon="throttle_all" kv="95" ctrlrange="0 1"/>
   </actuator>
 
   <equality>
