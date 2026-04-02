@@ -1,0 +1,170 @@
+<mujoco>
+  <!-- Junction extends ±47 m in x and y -->
+  <statistic center="0 0 0" extent="50" meansize="0.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-20" elevation="-20" ellipsoidinertia="true"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <!-- Grass/earth background outside the road -->
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.22 0.32 0.16" rgb2="0.18 0.26 0.12"
+             markrgb="0.28 0.38 0.20" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="25 25" reflectance="0.05"/>
+    <!-- Asphalt road surface -->
+    <material name="road"          rgba="0.20 0.20 0.20 1"/>
+    <!-- White road markings -->
+    <material name="marking_white" rgba="1.00 1.00 1.00 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Overhead directional light -->
+    <light pos="0 0 40" dir="0 0 -1" directional="true"
+           diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4"/>
+
+    <!-- Infinite grass/earth ground plane -->
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- ================================================================
+         ROAD GEOMETRY  (visual only — contype/conaffinity=0)
+         Layout : 4-way cross, right-hand traffic, 2 lanes per direction
+         Lane width  : 3.5 m  →  road half-width W = 7 m
+         Junction box: ±7 m in x and y
+         Arm length  : 40 m  (each arm runs from |coord|=7 to |coord|=47)
+         Lane centres:
+           N-S road  →  northbound x=+1.75,  southbound x=−1.75
+           E-W road  →  eastbound  y=−1.75,  westbound  y=+1.75
+    ================================================================ -->
+
+    <!-- Junction centre box -->
+    <geom name="road_center" type="box" pos="0 0 0.001" size="7 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- North arm  (y: 7 → 47) -->
+    <geom name="road_north" type="box" pos="0 27 0.001" size="7 20 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- South arm  (y: -47 → -7) -->
+    <geom name="road_south" type="box" pos="0 -27 0.001" size="7 20 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- East arm   (x: 7 → 47) -->
+    <geom name="road_east" type="box" pos="27 0 0.001" size="20 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- West arm   (x: -47 → -7) -->
+    <geom name="road_west" type="box" pos="-27 0 0.001" size="20 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         EDGE LINES  (solid white, 0.2 m wide)
+         One line per outer edge of each arm.
+    ================================================================ -->
+
+    <!-- North arm -->
+    <geom name="edge_north_W" type="box" pos="-7  27 0.002" size="0.1 20 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_north_E" type="box" pos=" 7  27 0.002" size="0.1 20 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- South arm -->
+    <geom name="edge_south_W" type="box" pos="-7 -27 0.002" size="0.1 20 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_south_E" type="box" pos=" 7 -27 0.002" size="0.1 20 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- East arm -->
+    <geom name="edge_east_N" type="box" pos=" 27  7 0.002" size="20 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_east_S" type="box" pos=" 27 -7 0.002" size="20 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- West arm -->
+    <geom name="edge_west_N" type="box" pos="-27  7 0.002" size="20 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_west_S" type="box" pos="-27 -7 0.002" size="20 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         CENTRE DASHED LINES  (white, 3 m dash / 3 m gap)
+         Divides the two opposing lanes in each arm.
+         Dashes start 2 m clear of the junction box to avoid clutter.
+    ================================================================ -->
+
+    <!-- North arm  (x=0, y: 9 → 45, step 6) -->
+    <geom name="dash_N_0" type="box" pos="0  9 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_1" type="box" pos="0 15 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_2" type="box" pos="0 21 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_3" type="box" pos="0 27 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_4" type="box" pos="0 33 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_5" type="box" pos="0 39 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_6" type="box" pos="0 45 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- South arm  (x=0, y: -9 → -45, step -6) -->
+    <geom name="dash_S_0" type="box" pos="0  -9 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_1" type="box" pos="0 -15 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_2" type="box" pos="0 -21 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_3" type="box" pos="0 -27 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_4" type="box" pos="0 -33 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_5" type="box" pos="0 -39 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_6" type="box" pos="0 -45 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- East arm   (y=0, x: 9 → 45, step 6) -->
+    <geom name="dash_E_0" type="box" pos=" 9 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_1" type="box" pos="15 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_2" type="box" pos="21 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_3" type="box" pos="27 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_4" type="box" pos="33 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_5" type="box" pos="39 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_6" type="box" pos="45 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- West arm   (y=0, x: -9 → -45, step -6) -->
+    <geom name="dash_W_0" type="box" pos=" -9 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_1" type="box" pos="-15 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_2" type="box" pos="-21 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_3" type="box" pos="-27 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_4" type="box" pos="-33 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_5" type="box" pos="-39 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_6" type="box" pos="-45 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         STOP LINES  (solid white, 0.3 m wide, at each approach)
+         Placed 0.5 m before the junction box, spanning the near lane only
+         (the lane approaching the junction under right-hand traffic rules).
+           North arm → southbound lane (x < 0)  stops at y = +7.5
+           South arm → northbound lane (x > 0)  stops at y = −7.5
+           East arm  → westbound lane  (y > 0)  stops at x = +7.5
+           West arm  → eastbound lane  (y < 0)  stops at x = −7.5
+    ================================================================ -->
+
+    <!-- Southbound traffic approaching from north, stops at y=+7.5, x: -7→0 -->
+    <geom name="stop_N_SB" type="box" pos="-3.5  7.5 0.002" size="3.5 0.15 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Northbound traffic approaching from south, stops at y=-7.5, x: 0→+7 -->
+    <geom name="stop_S_NB" type="box" pos=" 3.5 -7.5 0.002" size="3.5 0.15 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Westbound traffic approaching from east, stops at x=+7.5, y: 0→+7 -->
+    <geom name="stop_E_WB" type="box" pos=" 7.5  3.5 0.002" size="0.15 3.5 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Eastbound traffic approaching from west, stops at x=-7.5, y: -7→0 -->
+    <geom name="stop_W_EB" type="box" pos="-7.5 -3.5 0.002" size="0.15 3.5 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         EGO VEHICLE SPAWN POINT
+         South arm, northbound lane (x = +1.75), 35 m south of centre.
+         euler="0 0 90" rotates the car's +x axis onto the world +y axis
+         so the vehicle faces north.
+    ================================================================ -->
+    <frame name="world" pos="1.75 -35 0" euler="0 0 90"/>
+  </worldbody>
+</mujoco>

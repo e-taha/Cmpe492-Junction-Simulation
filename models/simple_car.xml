@@ -72,7 +72,7 @@
 
   <actuator>
     <!-- Position-controlled steering drives the virtual bicycle-model wheel   -->
-   <position name="steering" joint="steering_wheel" kp="5000"  ctrlrange="-35 35"/>
+   <position name="steering" joint="steering_wheel" kp="5000"  ctrlrange="-1 1"/>
     <!-- Velocity-independent throttle coupled equally to all four wheels      -->
     <motor name="throttle" tendon="throttle_all" gear="2520"
            ctrllimited="true" ctrlrange="0 1"/>
@@ -83,15 +83,7 @@
   </actuator>
 
   <equality>
-    <!-- Ackermann steering (Taylor expansion of exact geometry around δ=0)
-         L = a+b = 3.128 m,  W/2 = T_f/2 = 0.8225 m,  s = (W/2)/L = 0.26295
-
-         δ_l = arctan( L·tan(δ) / (L − (W/2)·tan(δ)) )
-         Coefficients: p1=1  p2=s  p3=s²  p4=s³−s/3                          -->
     <joint joint1="wheel_fl_steering" joint2="steering_wheel" polycoef="0 -1 0 0"/>
-
-    <!-- δ_r = arctan( L·tan(δ) / (L + (W/2)·tan(δ)) )
-         Coefficients: p1=1  p2=−s  p3=s²  p4=−(s³−s/3)                      -->
     <joint joint1="wheel_fr_steering" joint2="steering_wheel" polycoef="0 -1 0 0"/>
   </equality>
 
