@@ -26,7 +26,7 @@ MODEL_PATH = Path(__file__).parent.parent / "models" / "simple_car.xml"
 # Update these values if the official EDGAR README gives different numbers.
 REF = {
     "total_mass_kg":        2520.0,    # chassis 2400 + 4 × 30 kg wheels (tire+rim+brake est.)
-    "cg_z_m":               1.333,     # wheel_radius(0.346) + chassis_half_h(0.987)
+    "cg_z_m":               0.700,     # body_pos(1.333) + inertial_offset(-0.633); set via <inertial>
     "cg_to_front_axle_m":   1.484,     # a
     "cg_to_rear_axle_m":    1.644,     # b
     "wheelbase_m":           3.128,    # a + b
@@ -93,8 +93,9 @@ def test_total_mass(m: mujoco.MjModel) -> bool:
 def test_cg_height(m: mujoco.MjModel) -> bool:
     print("\n── 2. Centre-of-Gravity Height ────────────────────────────────────────")
     chassis_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "chassis")
-    cg_z = float(m.body_pos[chassis_id, 2])
-    ok = check("Chassis body z (CG above ground)", cg_z, REF["cg_z_m"], unit=" m")
+    # body_pos is the frame origin; body_ipos is the CoM offset within that frame.
+    cg_z = float(m.body_pos[chassis_id, 2]) + float(m.body_ipos[chassis_id, 2])
+    ok = check("Chassis CoG z above ground", cg_z, REF["cg_z_m"], unit=" m")
     print("         Cross-check: compare this value against h_CoG in "
           "vehicle_parameters_edgar.yaml")
     return ok
@@ -146,7 +147,7 @@ def test_steering_limits(m: mujoco.MjModel) -> bool:
       b) Add <compiler angle="radian"/> to simple_car.xml
     """
     print("\n── 6. Steering Joint Limits ───────────────────────────────────────────")
-    sw_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "steering_wheel")
+    sw_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "wheel_fl_steering")
     lo = float(m.jnt_range[sw_id, 0])
     hi = float(m.jnt_range[sw_id, 1])
     print(f"         Raw values from MjModel (radians): lo={lo:.6f}  hi={hi:.6f}")
@@ -194,11 +195,10 @@ MANUAL_CHECKS = """
 ║     Compare against I_z value in vehicle_parameters_edgar.yaml.             ║
 ║                                                                              ║
 ║  2. CG height against EDGAR measurement                                      ║
-║     Cross-check the simulated CG_z (1.49 m) against h_CoG in               ║
-║     vehicle_parameters_edgar.yaml.  Typical passenger cars: 0.5–0.7 m;      ║
-║     the EDGAR model's 1.49 m is the geometric centre of the chassis box,    ║
-║     not a measured CG. If the YAML gives a different value, update           ║
-║     the chassis body z-position accordingly.                                 ║
+║     Simulated CG_z = 0.70 m (set via <inertial pos="0 0 -0.633"> in XML).  ║
+║     h_cg is blank in vehicle_parameters_edgar.yaml (unmeasured).            ║
+║     0.70 m is a reasonable estimate for a VW T7-class van. Update REF and   ║
+║     the inertial offset in simple_car.xml if a measured value is found.     ║
 ║                                                                              ║
 ║  3. Tire model fidelity                                                      ║
 ║     MuJoCo uses a simple friction-cone contact model, NOT a Pacejka tire    ║

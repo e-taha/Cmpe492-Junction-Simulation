@@ -56,35 +56,45 @@ def main():
     steer_deg = np.degrees(data["steer_angle_rad"])
     mean_speed = float(np.mean(data["speed_ms"][len(t) // 3:]))
 
+    # ── Circle fit from steady-state portion (last 1/3 of data) ────────────────
+    # Least-squares: (x-cx)^2 + (y-cy)^2 = R^2
+    # Linearised: x^2 + y^2 = 2*cx*x + 2*cy*y + (R^2 - cx^2 - cy^2)
+    settle = len(t) * 2 // 3
+    xs_ss, ys_ss = x[settle:], y[settle:]
+    A = np.column_stack([2 * xs_ss, 2 * ys_ss, np.ones(len(xs_ss))])
+    b_vec = xs_ss ** 2 + ys_ss ** 2
+    result, _, _, _ = np.linalg.lstsq(A, b_vec, rcond=None)
+    cx_fit, cy_fit = float(result[0]), float(result[1])
+    R_fit = float(math.sqrt(result[2] + cx_fit ** 2 + cy_fit ** 2))
+
     fig = plt.figure(figsize=(12, 9))
     fig.suptitle(
         f"Steering Limits — EDGAR MuJoCo Model\n"
         f"delta_max = {DELTA_MAX_RAD:.6f} rad ({DELTA_MAX_DEG:.2f}°),  "
-        f"throttle = 0.15,  {t[-1]:.0f} s",
+        f"throttle = 0.35,  {t[-1]:.0f} s  (fitted R={R_fit:.2f} m)",
         fontsize=12,
     )
 
     gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.40, wspace=0.35)
 
     # ── Panel 1: XY trajectory ──────────────────────────────────────────────────
-    ax_xy = fig.add_subplot(gs[0, 0])
-    ax_xy.plot(y, x, color="steelblue", linewidth=1.2, label="Trajectory")
-    ax_xy.plot(y[0], x[0], "go", markersize=6, label="Start")
-    ax_xy.plot(y[-1], x[-1], "rs", markersize=6, label="End")
-
-    # Overlay theoretical circle
     theta = np.linspace(0, 2 * math.pi, 300)
-    # Estimate circle centre from data (mean of coords after settling)
-    settle = len(t) // 3
-    cx = float(np.mean(x[settle:]))
-    cy = float(np.mean(y[settle:]))
-    ax_xy.plot(cy + R_THEORY * np.sin(theta),
-               cx + R_THEORY * np.cos(theta),
+    ax_xy = fig.add_subplot(gs[0, 0])
+    ax_xy.plot(x, y, color="steelblue", linewidth=1.2, label="Trajectory")
+    ax_xy.plot(x[0], y[0], "go", markersize=6, label="Start")
+    ax_xy.plot(x[-1], y[-1], "rs", markersize=6, label="End")
+
+    ax_xy.plot(cx_fit + R_fit * np.cos(theta),
+               cy_fit + R_fit * np.sin(theta),
+               color="steelblue", linestyle=":", linewidth=1.0,
+               label=f"Fitted R={R_fit:.2f} m")
+    ax_xy.plot(cx_fit + R_THEORY * np.cos(theta),
+               cy_fit + R_THEORY * np.sin(theta),
                color="orange", linestyle="--", linewidth=1.0,
                label=f"Theory R={R_THEORY:.2f} m")
 
-    ax_xy.set_xlabel("Y (m)")
-    ax_xy.set_ylabel("X (m)")
+    ax_xy.set_xlabel("X (m)")
+    ax_xy.set_ylabel("Y (m)")
     ax_xy.set_title("XY Trajectory (top-down)")
     ax_xy.set_aspect("equal")
     ax_xy.grid(True, linestyle="--", alpha=0.5)

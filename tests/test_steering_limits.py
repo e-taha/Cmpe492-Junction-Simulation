@@ -47,15 +47,15 @@ DELTA_MAX_DEG = DELTA_MAX_RAD * (180.0 / math.pi)   # ≈ 35.0°  (informational
 WHEELBASE_M   = 3.128               # a + b  (CG-to-front + CG-to-rear axle)
 
 # ── Test parameters ─────────────────────────────────────────────────────────────
-# Moderate throttle: prevents excessive lateral g at tight radius (~4.5 m).
-# At max steer,  a_lat = v² / R.  With friction_coef=1.5 and R≈4.47 m the
-# stability limit is v ≈ 8 m/s ≈ 29 km/h.  throttle=0.15 keeps ~15–20 km/h.
-THROTTLE        = 0.25
-TEST_DURATION_S = 20.0   # long enough for several full circles
+# The model has no passive drag, so speed keeps rising until lateral tire forces
+# limit it.  60 s gives several full circles and a near-steady-state speed.
+# At max steer, stability limit ≈ 8 m/s (29 km/h) with friction_coef=1.5.
+THROTTLE        = 0.35
+TEST_DURATION_S = 60.0   # long enough to approach terminal circular speed
 
-SETTLE_FRAC  = 0.30   # skip first 30 % of data before computing steady-state metrics
+SETTLE_FRAC  = 0.60   # skip first 60 % — vehicle still spiralling early on
 ANGLE_TOL    = 0.05   # 5 %  relative tolerance on steering angle
-RADIUS_TOL   = 0.15   # 15 % tolerance on turning radius vs bicycle model
+RADIUS_TOL   = 0.20   # 20 % tolerance — accounts for tire slip vs kinematic model
 
 EXPECTED = {
     "steer_angle_rad":  DELTA_MAX_RAD,
