@@ -31,13 +31,6 @@
       <geom name="chassis" type="box" size="2.4865 0.9705 0.987"
             mass="2400" rgba="0.2 0.4 0.8 1"/>
 
-      <!-- Virtual bicycle-model steering reference at front axle centre.      -->
-      <!-- Controlled by the steering actuator; fl/fr are slaved via Ackermann -->
-      <body name="steering_wheel" pos="1.484 0 -0.987">
-        <joint class="steering" name="steering_wheel"/>
-        <geom type="cylinder" size="0.01 0.01" mass="0.01" rgba="0 0 0 0" contype="0" conaffinity="0"/>
-      </body>
-
       <!-- Front-left wheel -->
       <body name="wheel_fl" pos="1.484 0.8225 -0.987">
         <joint class="steering" name="wheel_fl_steering"/>
@@ -71,23 +64,27 @@
   </worldbody>
 
   <actuator>
-    <!-- Position-controlled steering drives the virtual bicycle-model wheel   -->
-   <position name="steering" joint="steering_wheel" kp="5000"  ctrlrange="-1 1"/>
-    <!-- Velocity-independent throttle coupled equally to all four wheels      -->
+    <position name="steering" tendon="steering_link" kp="10000" ctrlrange="-1.2217 1.2217"/>
     <motor name="throttle" tendon="throttle_all" gear="2520"
            ctrllimited="true" ctrlrange="0 1"/>
-    <!-- Velocity-proportional brake: f = -kv × ctrl × tendon_vel             -->
-    <!-- kv=95 → 3.5 m/s² deceleration at 40 km/h (EDGAR a_min spec)          -->
-    <!-- Force → 0 as v → 0, so vehicle cannot reverse under braking            -->
     <damper name="brake" tendon="throttle_all" kv="95" ctrlrange="0 1"/>
   </actuator>
 
-  <equality>
+  <!-- <equality>
     <joint joint1="wheel_fl_steering" joint2="steering_wheel" polycoef="0 -1 0 0"/>
     <joint joint1="wheel_fr_steering" joint2="steering_wheel" polycoef="0 -1 0 0"/>
-  </equality>
+  </equality> -->
+
+  <equality>
+  <joint joint1="wheel_fl_steering" joint2="wheel_fr_steering" 
+         polycoef="0 1 0 0" solimp="0.99 0.99 0.01" solref="0.001 1"/>
+</equality>
 
   <tendon>
+    <fixed name="steering_link">
+      <joint joint="wheel_fl_steering" coef="-1.0"/>
+      <joint joint="wheel_fr_steering" coef="-1.0"/>
+    </fixed>
     <fixed name="throttle_all">
       <joint joint="fl_spin" coef="0.25"/>
       <joint joint="fr_spin" coef="0.25"/>

@@ -17,12 +17,14 @@ d  = mujoco.MjData(m)
 vel_id     = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR, "robot-velocimeter")
 acc_id     = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR, "robot-accelerometer")
 chassis_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY,   "robot-chassis")
+sw_ten_id  = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_TENDON,  "robot-steering_link")
 fl_jnt_id  = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT,  "robot-wheel_fl_steering")
 fr_jnt_id  = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT,  "robot-wheel_fr_steering")
 vel_adr    = int(m.sensor_adr[vel_id])
 acc_adr    = int(m.sensor_adr[acc_id])
 fl_qpos_adr = int(m.jnt_qposadr[fl_jnt_id])
 fr_qpos_adr = int(m.jnt_qposadr[fr_jnt_id])
+
 
 # Pressing SPACE key toggles the paused state.
 def mujoco_viewer_callback(keycode):
@@ -37,6 +39,8 @@ def step():
     accel   = float(d.sensordata[acc_adr])
     fl_deg  = float(np.degrees(d.qpos[fl_qpos_adr]))
     fr_deg  = float(np.degrees(d.qpos[fr_qpos_adr]))
+    steering_link_rad = float(d.ten_length[sw_ten_id])
+    steering_link_deg = float(np.degrees(steering_link_rad))
 
     viewer.user_scn.ngeom = 0
     geom = viewer.user_scn.geoms[0]
@@ -54,7 +58,8 @@ def step():
         f"t={d.time:.1f}s  "
         f"v={speed * 3.6:.1f} km/h  "
         f"a={accel:.2f} m/s2  "
-        f"FL={fl_deg:.1f}deg  FR={fr_deg:.1f}deg"
+        f"FL={fl_deg:.1f}deg  FR={fr_deg:.1f}deg  "
+        f"Steering={steering_link_deg:.1f}deg"
     )
     viewer.user_scn.ngeom = 1
 
@@ -68,11 +73,9 @@ def key_callback(keycode):
     elif keycode == 264:  # Use down arrow key to decrease throttle
         d.ctrl[1] -= 0.1  # Decrease throttle control signal
     elif keycode == 262:  # Use right arrow key to increase steering angle
-        # pass
-        d.ctrl[0] += 1  # Increase steering control signal
+        d.ctrl[0] += np.radians(10)  # +10° per keypress
     elif keycode == 263:  # Use left arrow key to decrease steering angle
-        # pass
-        d.ctrl[0] -= 1  # Decrease steering control signal
+        d.ctrl[0] -= np.radians(10)  # -10° per keypress
     print(f"Control signals: throttle={d.ctrl[1]}, steering={d.ctrl[0]}")
 
 with mujoco.viewer.launch_passive(m, d, key_callback=key_callback) as viewer:
