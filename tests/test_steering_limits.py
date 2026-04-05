@@ -42,7 +42,7 @@ RESULTS_DIR = Path(__file__).parent / "results"
 CSV_PATH    = RESULTS_DIR / "steering_limits.csv"
 
 # ── Parameters from vehicle_parameters_edgar.yaml ──────────────────────────────
-DELTA_MAX_RAD = 0.1           # rad  — exact value from YAML (delta_max)
+DELTA_MAX_RAD = 0.610865      # rad  — exact value from YAML (delta_max = 35°)
 DELTA_MAX_DEG = DELTA_MAX_RAD * (180.0 / math.pi)   # ≈ 35.0°  (informational)
 WHEELBASE_M   = 3.128               # a + b  (CG-to-front + CG-to-rear axle)
 
@@ -50,7 +50,7 @@ WHEELBASE_M   = 3.128               # a + b  (CG-to-front + CG-to-rear axle)
 # Moderate throttle: prevents excessive lateral g at tight radius (~4.5 m).
 # At max steer,  a_lat = v² / R.  With friction_coef=1.5 and R≈4.47 m the
 # stability limit is v ≈ 8 m/s ≈ 29 km/h.  throttle=0.15 keeps ~15–20 km/h.
-THROTTLE        = 0.5
+THROTTLE        = 0.25
 TEST_DURATION_S = 20.0   # long enough for several full circles
 
 SETTLE_FRAC  = 0.30   # skip first 30 % of data before computing steady-state metrics
@@ -76,15 +76,16 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
     acc_id       = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR,   "accelerometer")
     gyro_id      = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR,   "gyro")
     chassis_id   = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY,     "chassis")
-    steer_jnt_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT,    "steering_wheel")
+    steer_jnt_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT,    "wheel_fl_steering")
 
     vel_adr       = int(m.sensor_adr[vel_id])
     acc_adr       = int(m.sensor_adr[acc_id])
     gyro_adr      = int(m.sensor_adr[gyro_id])
     steer_jnt_adr = int(m.jnt_qposadr[steer_jnt_id])
 
-    # Position actuator ctrl is in radians at runtime (ctrlrange XML degrees → rad)
-    d.ctrl[steering_id] = DELTA_MAX_DEG
+    # Tendon = (-1)*fl_angle + (-1)*fr_angle; both equal via constraint.
+    # To command left turn at DELTA_MAX_RAD: ctrl = -2 * DELTA_MAX_RAD = -1.2217
+    d.ctrl[steering_id] = -2.0 * DELTA_MAX_RAD
     d.ctrl[throttle_id] = THROTTLE
 
     times, xs, ys = [], [], []

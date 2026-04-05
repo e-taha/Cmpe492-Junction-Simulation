@@ -25,6 +25,8 @@
     <!-- T_f=1.645 m -> half-track = 0.8225 m                                      -->
     <body name="chassis" pos="0 0 1.333">
       <freejoint name="root"/>
+      <inertial pos="0 0 -0.633" mass="2400"
+            diaginertia="3500 13000 13600"/>
       <site name="imu" pos="0 0 0"/>
       <!-- Reference marker at roof height (2.32m above ground = 0.987m above CG) -->
       <site name="roof_ref" pos="0 0 0.987" size="0.05" rgba="1 0 0 1"/>
