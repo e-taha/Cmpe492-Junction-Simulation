@@ -1,0 +1,84 @@
+<mujoco>
+
+  <statistic center="0 125 0" extent="200" meansize="1.0"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-20" elevation="-20" ellipsoidinertia="true"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.22 0.32 0.16" rgb2="0.18 0.26 0.12"
+             markrgb="0.28 0.38 0.20" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="25 25" reflectance="0.05"/>
+    <material name="road"           rgba="0.20 0.20 0.20 1"/>
+    <material name="marking_white"  rgba="1.00 1.00 1.00 1"/>
+    <material name="marking_yellow" rgba="1.00 0.85 0.00 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 150 40" dir="0 0 -1" directional="true"
+           diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4"/>
+
+    <!-- Infinite ground plane -->
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- ================================================================
+         STRAIGHT NORTH-SOUTH ROAD
+         Two lanes (each 3.5 m wide), total 7 m.
+         Northbound lane centre : x = +1.75 m
+         Southbound lane centre : x = -1.75 m
+         Road runs from y = -30 m (south) to y = 350 m (north).
+    ================================================================ -->
+    <geom name="road" type="box" pos="0 160 0.001" size="3.5 190 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- Edge lines (solid white, 0.2 m wide) -->
+    <geom name="edge_east" type="box" pos=" 3.5 160 0.002" size="0.1 190 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_west" type="box" pos="-3.5 160 0.002" size="0.1 190 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Centre divider (solid yellow — separates opposing traffic) -->
+    <geom name="centre_divider" type="box" pos="0 160 0.002" size="0.1 190 0.001"
+          material="marking_yellow" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         GVT — Global Vehicle Target
+         Oncoming vehicle that performs a head-on lane change cut-in.
+         Initial lane: southbound (x = -1.75 m).
+         Initial position: y = 250 m (far north), heading south.
+         Dimensions: VW Golf-class (4.023 m long, 1.941 m wide).
+         half-lengths: longitudinal=2.0115 m, lateral=0.9705 m, height=0.987 m
+    ================================================================ -->
+    <body name="gvt" mocap="true" pos="-1.75 250 1.333" euler="0 0 -90">
+      <geom type="box" size="2.0115 0.9705 0.987"
+            rgba="0.9 0.2 0.1 0.9" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ================================================================
+         SOV — Screen Object Vehicle (obstruction)
+         Travels ahead of GVT in the southbound lane at the same speed.
+         Initial position: 24 m south of GVT (freespace ~19.4 m).
+         Larger obstruction vehicle: 5 m long, 2 m wide.
+    ================================================================ -->
+    <body name="sov" mocap="true" pos="-1.75 226 1.5" euler="0 0 -90">
+      <geom type="box" size="2.5 1.0 1.0"
+            rgba="0.9 0.55 0.1 0.9" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ================================================================
+         EGO SPAWN FRAME
+         Northbound lane centre, heading north.
+         euler "0 0 90" rotates vehicle local +x → world +y (north).
+    ================================================================ -->
+    <frame name="spawn_ego" pos="1.75 0 0" euler="0 0 90"/>
+
+  </worldbody>
+
+</mujoco>
