@@ -5,33 +5,41 @@ The ego vehicle starts in the south arm (northbound lane, x=+1.75 m, y=-35 m),
 approaches the junction, decelerates, and turns right into the eastbound lane
 (y=-1.75 m), then exits via the east arm.
 
-Junction geometry (right-hand traffic):
-  - Northbound lane centre : x = +1.75 m
-  - Eastbound lane centre  : y = -1.75 m
-  - Junction box           : |x| < 7 m and |y| < 7 m
-  - Ideal turn arc centre  : (x=+7, y=-7)  — inner corner
-  - Ideal turn radius      : 5.25 m
-  - Required wheel angle   : delta = atan(L / R) = atan(3.128 / 5.25) ≈ 0.538 rad
-  - Steering ctrl (right)  : +2 × 0.538 ≈ +1.076
+Reference path
+--------------
+  Segment 1 — straight approach:
+    (1.75, -35) → (1.75, -7)   along northbound lane
 
-Control phases (position + heading based):
-  Phase 1  y < -20 m          : throttle=0.20, steer=0    — accelerate to ~30 km/h
-  Phase 2  -20 ≤ y < -9 m     : throttle=0.08, steer=0    — hold moderate speed
-  Phase 3  -9 ≤ y < -7 m      : throttle=0,   brake=0.55  — brake before turn
-  Phase 4  turning (hdg N→E)   : throttle=0.10, steer=+1.076 — execute right turn
-  Phase 5  heading ≈ east      : throttle=0.22, steer=0    — straighten and exit east
+  Segment 2 — circular arc (right turn, clockwise):
+    centre (7.0, -7.0), radius 5.25 m
+    θ: π → π/2  (clockwise)
+    entry  (1.75, -7.0)  heading north
+    exit   (7.0,  -1.75) heading east
+
+  Segment 3 — straight exit:
+    (7.0, -1.75) → (45.0, -1.75)  along eastbound lane
+
+  Arc geometry derivation:
+    Northbound lane x = +1.75 m → right = +x direction
+    Arc centre = (1.75 + R, -7) = (7.0, -7)  with R = 5.25 m
+    After 90° CW turn: exit point = centre + (0, +R) = (7.0, -1.75) ✓
+
+  Tracked by Pure Pursuit (lookahead = 3 m).
+
+Throttle phases (position-based; steering is always Pure Pursuit):
+  approach  y < -10 m        : throttle=0.18
+  brake     -10 ≤ y < -7 m  : brake=0.45
+  maneuver  x <  12 m       : throttle=0.10
+  exit      x ≥  12 m       : throttle=0.22
 
 Pass criteria:
-  1. Vehicle enters east arm  (chassis x > +15 m)
-  2. Exits in eastbound lane  (chassis y between -7 m and  0 m once x > +7 m)
-  3. Does not mount the kerb  (chassis y > -7 m throughout the turn)
+  1. Vehicle enters east arm        (chassis x > +15 m)
+  2. Exits in eastbound lane        (-7 m ≤ chassis y ≤ 0 m while x > +7 m)
+  3. Does not mount the inner kerb  (chassis y ≥ -7 m throughout)
 
 Usage
 -----
-Headless:
   mjpython scenarios/right_turn/index.py
-
-With MuJoCo viewer:
   mjpython scenarios/right_turn/index.py --viewer
 """
 
@@ -45,50 +53,49 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-ROOT_DIR    = Path(__file__).parent.parent.parent
+# ── Module path ────────────────────────────────────────────────────────────────
+ROOT_DIR = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT_DIR / "src"))
+from pure_pursuit import (PurePursuit, straight_segment, arc_segment,
+                          make_path, heading_from_xmat, draw_overlay)
+
+# ── File paths ─────────────────────────────────────────────────────────────────
 SCENE_PATH  = ROOT_DIR / "scenes" / "junction.xml"
 MODEL_PATH  = ROOT_DIR / "models" / "simple_car.xml"
 RESULTS_DIR = Path(__file__).parent / "results"
 CSV_PATH    = RESULTS_DIR / "right_turn.csv"
 
-# ── Vehicle / junction constants ───────────────────────────────────────────────
-WHEELBASE_M      = 3.128          # m
-JUNCTION_BOX     = 7.0            # m — |coord| < this = inside junction
-NORTHBOUND_X     = 1.75           # m — northbound lane centre
-EASTBOUND_Y      = -1.75          # m — eastbound lane centre
-TURN_RADIUS_M    = 5.25           # m — arc radius for ideal right turn
-TURN_DELTA_RAD   = math.atan(WHEELBASE_M / TURN_RADIUS_M)  # ≈ 0.538 rad
-STEER_RIGHT_CTRL = 2.0 * TURN_DELTA_RAD                    # ≈ +1.076
-
-# ── Phase thresholds ──────────────────────────────────────────────────────────
-Y_HOLD_SPEED   = -20.0   # m — switch to hold-speed phase below this y
-Y_BRAKE_START  = -9.0    # m — begin braking
-Y_TURN_START   = -7.0    # m — begin right-turn steering
-HDG_EAST_RAD   = 0.15    # rad — heading threshold to declare "facing east"
+# ── Scenario parameters ────────────────────────────────────────────────────────
+WHEELBASE_M    = 3.128
+LOOKAHEAD_M    = 3.0     # m — short lookahead for tight turn tracking
 TEST_DURATION_S = 30.0   # s
 
 # ── Pass criteria ──────────────────────────────────────────────────────────────
-EAST_ARM_X     = 15.0    # m — x must exceed this to count as "entered east arm"
-LANE_Y_MIN     = -7.0    # m — lower bound of eastbound lane (road edge)
-LANE_Y_MAX     =  0.0    # m — upper bound of eastbound lane (centre line)
+EAST_ARM_X  = 15.0   # m
+LANE_Y_MIN  = -7.0   # m — southern edge of eastbound lane
+LANE_Y_MAX  =  0.0   # m — centre line (upper edge of eastbound lane)
+JUNCTION_BOX = 7.0   # m
 
+# ── Reference path ─────────────────────────────────────────────────────────────
+#
+#              N
+#              ↑
+#              │  x=1.75 (northbound)
+#   (7,-1.75) ─────────────────────────────→ E   y=-1.75 (eastbound)
+#          ╮  arc centre (7,-7), R=5.25 m
+#          │
+#          │  (1.75,-7) to (1.75,-35)
+#          ↓
+#        spawn
+#
+_ARC_CX, _ARC_CY, _ARC_R = 7.0, -7.0, 5.25
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _heading_rad(xmat: np.ndarray, body_id: int) -> float:
-    """Yaw heading of body in world frame (atan2 of forward direction).
-
-    d.xmat has shape (nbody, 9): each row is the flattened 3×3 rotation matrix
-    for that body. Column 0 = world-x of local +x, column 1 = world-y of local +x.
-    """
-    # xmat row layout (row-major 3×3): [R00 R01 R02 R10 R11 R12 R20 R21 R22]
-    # Forward direction = local +x → world vector = first column of R:
-    #   world-x = R[0,0] = index 0
-    #   world-y = R[1,0] = index 3
-    fx = float(xmat[body_id, 0])
-    fy = float(xmat[body_id, 3])
-    return math.atan2(fy, fx)
+PATH = make_path(
+    straight_segment(1.75, -35.0,  1.75,  -7.0),          # approach
+    arc_segment(_ARC_CX, _ARC_CY, _ARC_R,                  # right turn
+                math.pi, math.pi / 2),                     # θ: π → π/2 (CW)
+    straight_segment(7.0,  -1.75, 45.0,  -1.75),           # exit east
+)
 
 
 # ── Model ──────────────────────────────────────────────────────────────────────
@@ -106,7 +113,6 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
     d = mujoco.MjData(m)
     mujoco.mj_resetData(m, d)
 
-    # ── IDs ───────────────────────────────────────────────────────────────────
     steering_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "robot-steering")
     throttle_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "robot-throttle")
     brake_id    = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "robot-brake")
@@ -115,66 +121,54 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
     chassis_id  = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY,     "robot-chassis")
     fl_jnt_id   = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT,    "robot-wheel_fl_steering")
 
-    vel_adr  = int(m.sensor_adr[vel_id])
-    acc_adr  = int(m.sensor_adr[acc_id])
-    fl_qpos  = int(m.jnt_qposadr[fl_jnt_id])
+    vel_adr = int(m.sensor_adr[vel_id])
+    acc_adr = int(m.sensor_adr[acc_id])
+    fl_qpos = int(m.jnt_qposadr[fl_jnt_id])
 
-    # ── Telemetry buffers ─────────────────────────────────────────────────────
+    tracker = PurePursuit(PATH, WHEELBASE_M, LOOKAHEAD_M)
+
     times, xs, ys           = [], [], []
-    speeds                  = []
-    accel_lons, accel_lats  = [], []
+    speeds, accel_lons, accel_lats = [], [], []
     steer_angles, phases    = [], []
 
-    def _phase_and_controls() -> str:
+    def _step_controls() -> str:
         cx  = float(d.xpos[chassis_id][0])
         cy  = float(d.xpos[chassis_id][1])
-        hdg = _heading_rad(d.xmat, chassis_id)
+        hdg = heading_from_xmat(d.xmat, chassis_id)
 
-        if cy < Y_HOLD_SPEED:
-            phase = "accel"
-            d.ctrl[steering_id] = 0.0
-            d.ctrl[throttle_id] = 0.20
+        # Throttle/brake phase (position-based)
+        if cy < -10.0:
+            phase = "approach"
+            d.ctrl[throttle_id] = 0.18
             d.ctrl[brake_id]    = 0.0
-        elif cy < Y_BRAKE_START:
-            phase = "hold"
-            d.ctrl[steering_id] = 0.0
-            d.ctrl[throttle_id] = 0.08
-            d.ctrl[brake_id]    = 0.0
-        elif cy < Y_TURN_START:
+        elif cy < -7.0:
             phase = "brake"
-            d.ctrl[steering_id] = 0.0
             d.ctrl[throttle_id] = 0.0
-            d.ctrl[brake_id]    = 0.55
-        elif hdg > HDG_EAST_RAD:
-            # Still turning — heading not yet east
-            phase = "turn"
-            d.ctrl[steering_id] = STEER_RIGHT_CTRL
+            d.ctrl[brake_id]    = 0.45
+        elif cx < 12.0:
+            phase = "maneuver"
             d.ctrl[throttle_id] = 0.10
             d.ctrl[brake_id]    = 0.0
         else:
-            # Heading is approximately east — straighten and drive out
             phase = "exit"
-            d.ctrl[steering_id] = 0.0
             d.ctrl[throttle_id] = 0.22
             d.ctrl[brake_id]    = 0.0
 
+        # Steering always from Pure Pursuit
+        d.ctrl[steering_id] = tracker.compute_ctrl(cx, cy, hdg)
         return phase
 
     def _record(phase: str):
-        vx    = float(d.sensordata[vel_adr])
-        vy    = float(d.sensordata[vel_adr + 1])
-        lon_a = float(d.sensordata[acc_adr])
-        lat_a = float(d.sensordata[acc_adr + 1])
-        steer = float(d.qpos[fl_qpos])
-        pos   = d.xpos[chassis_id]
-
+        vx  = float(d.sensordata[vel_adr])
+        vy  = float(d.sensordata[vel_adr + 1])
+        pos = d.xpos[chassis_id]
         times.append(d.time)
         xs.append(float(pos[0]))
         ys.append(float(pos[1]))
         speeds.append(math.sqrt(vx**2 + vy**2))
-        accel_lons.append(lon_a)
-        accel_lats.append(lat_a)
-        steer_angles.append(steer)
+        accel_lons.append(float(d.sensordata[acc_adr]))
+        accel_lats.append(float(d.sensordata[acc_adr + 1]))
+        steer_angles.append(float(d.qpos[fl_qpos]))
         phases.append(phase)
 
     def _done() -> bool:
@@ -183,42 +177,29 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
     if show_viewer:
         with mujoco.viewer.launch_passive(m, d) as viewer:
             while viewer.is_running() and d.time < TEST_DURATION_S:
-                step_start = time.time()
-                phase = _phase_and_controls()
+                t0    = time.time()
+                phase = _step_controls()
                 mujoco.mj_step(m, d)
                 _record(phase)
                 if _done():
                     break
 
-                speed_kph = speeds[-1] * 3.6
-                hdg_deg   = math.degrees(_heading_rad(d.xmat, chassis_id))
-                viewer.user_scn.ngeom = 0
-                geom = viewer.user_scn.geoms[0]
-                label_pos = d.xpos[chassis_id].copy()
-                label_pos[2] += 3.0
-                mujoco.mjv_initGeom(
-                    geom,
-                    mujoco.mjtGeom.mjGEOM_LABEL,
-                    np.zeros(3),
-                    label_pos,
-                    np.eye(3).flatten(),
-                    np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32),
+                cx, cy = xs[-1], ys[-1]
+                hdg    = heading_from_xmat(d.xmat, chassis_id)
+                lp     = tracker.lookahead_point(cx, cy)
+                lbl    = d.xpos[chassis_id].copy(); lbl[2] += 3.0
+                draw_overlay(
+                    viewer, PATH, lp, lbl,
+                    f"t={d.time:.1f}s  v={speeds[-1]*3.6:.1f} km/h  "
+                    f"x={cx:.2f} m  y={cy:.2f} m  [{phase}]",
                 )
-                geom.label = (
-                    f"t={d.time:.1f}s  "
-                    f"v={speed_kph:.1f} km/h  "
-                    f"x={xs[-1]:.2f} m  y={ys[-1]:.2f} m  "
-                    f"hdg={hdg_deg:.1f}°  [{phase}]"
-                )
-                viewer.user_scn.ngeom = 1
                 viewer.sync()
-                elapsed = time.time() - step_start
-                sleep_t = m.opt.timestep - elapsed
+                sleep_t = m.opt.timestep - (time.time() - t0)
                 if sleep_t > 0:
                     time.sleep(sleep_t)
     else:
         while d.time < TEST_DURATION_S:
-            phase = _phase_and_controls()
+            phase = _step_controls()
             mujoco.mj_step(m, d)
             _record(phase)
             if _done():
@@ -236,116 +217,94 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
     }
 
 
-# ── Metrics & checks ────────────────────────────────────────────────────────────
+# ── Metrics ────────────────────────────────────────────────────────────────────
 
 def extract_metrics(data: dict) -> dict:
-    xs     = data["x_m"]
-    ys     = data["y_m"]
-    speeds = data["speed_ms"]
+    xs, ys, speeds = data["x_m"], data["y_m"], data["speed_ms"]
+    phases = np.array(data["phase"])
 
     entered_east = bool(np.any(xs > EAST_ARM_X))
 
-    # y position while in east arm (x > junction box)
     in_east = xs > JUNCTION_BOX
-    if in_east.any():
-        y_in_east_min = float(np.min(ys[in_east]))
-        y_in_east_max = float(np.max(ys[in_east]))
-    else:
-        y_in_east_min = float("nan")
-        y_in_east_max = float("nan")
+    y_east_min = float(np.min(ys[in_east])) if in_east.any() else float("nan")
+    y_east_max = float(np.max(ys[in_east])) if in_east.any() else float("nan")
 
-    # Minimum y (southernmost) during the turn — must stay above -7 (road edge)
-    turning = np.array(data["phase"]) == "turn"
-    min_y_during_turn = float(np.min(ys[turning])) if turning.any() else float("nan")
-
-    peak_speed_kph   = float(np.max(speeds)) * 3.6
-    turn_speed_kph   = float(np.mean(speeds[turning])) * 3.6 if turning.any() else float("nan")
+    # Kerb check: minimum y during the maneuver phase
+    maneuvering = phases == "maneuver"
+    min_y_maneuver = float(np.min(ys[maneuvering])) if maneuvering.any() else float("nan")
+    spd_maneuver   = float(np.mean(speeds[maneuvering])) * 3.6 if maneuvering.any() else float("nan")
 
     return {
         "entered_east":      entered_east,
-        "y_in_east_min":     y_in_east_min,
-        "y_in_east_max":     y_in_east_max,
-        "min_y_during_turn": min_y_during_turn,
-        "peak_speed_kph":    peak_speed_kph,
-        "turn_speed_kph":    turn_speed_kph,
+        "y_east_min":        y_east_min,
+        "y_east_max":        y_east_max,
+        "min_y_maneuver":    min_y_maneuver,
+        "turn_speed_kph":    spd_maneuver,
+        "peak_speed_kph":    float(np.max(speeds)) * 3.6,
         "final_x_m":         float(xs[-1]),
     }
 
 
-# ── Report ──────────────────────────────────────────────────────────────────────
+# ── Report ─────────────────────────────────────────────────────────────────────
 
 def print_report(metrics: dict) -> bool:
-    all_pass = True
+    ok = True
     print("\n── Metrics ────────────────────────────────────────────────────────────")
-    print(f"  [INFO] Final chassis x:          {metrics['final_x_m']:.2f} m")
-    print(f"  [INFO] Peak speed:               {metrics['peak_speed_kph']:.1f} km/h")
-    print(f"  [INFO] Mean speed during turn:   {metrics['turn_speed_kph']:.1f} km/h")
-    print(f"  [INFO] Min y during turn:        {metrics['min_y_during_turn']:.2f} m")
-    if not math.isnan(metrics["y_in_east_min"]):
-        print(f"  [INFO] y range in east arm:      "
-              f"[{metrics['y_in_east_min']:.2f}, {metrics['y_in_east_max']:.2f}] m")
+    print(f"  [INFO] Final chassis x:         {metrics['final_x_m']:.2f} m")
+    print(f"  [INFO] Peak speed:              {metrics['peak_speed_kph']:.1f} km/h")
+    print(f"  [INFO] Mean speed in maneuver:  {metrics['turn_speed_kph']:.1f} km/h")
+    print(f"  [INFO] Min y during maneuver:   {metrics['min_y_maneuver']:.2f} m")
+    if not math.isnan(metrics["y_east_min"]):
+        print(f"  [INFO] y range in east arm:     "
+              f"[{metrics['y_east_min']:.2f}, {metrics['y_east_max']:.2f}] m")
 
-    # Check 1: vehicle entered east arm
     ok1 = metrics["entered_east"]
-    if not ok1:
-        all_pass = False
+    ok  = ok and ok1
     print(f"\n  [{'PASS' if ok1 else 'FAIL'}] Vehicle enters east arm (x > {EAST_ARM_X} m)")
     print(f"         final x = {metrics['final_x_m']:.2f} m")
 
-    # Check 2: y in correct eastbound lane while in east arm
-    if math.isnan(metrics["y_in_east_min"]):
-        print(f"\n  [SKIP] Eastbound lane check: vehicle never entered east arm")
+    if math.isnan(metrics["y_east_min"]):
+        print(f"\n  [SKIP] Eastbound lane check: vehicle never crossed junction box")
     else:
-        ok2 = (metrics["y_in_east_min"] >= LANE_Y_MIN and
-               metrics["y_in_east_max"] <= LANE_Y_MAX)
-        if not ok2:
-            all_pass = False
+        ok2 = metrics["y_east_min"] >= LANE_Y_MIN and metrics["y_east_max"] <= LANE_Y_MAX
+        ok  = ok and ok2
         print(f"\n  [{'PASS' if ok2 else 'FAIL'}] Exits in eastbound lane "
-              f"({LANE_Y_MIN} m ≤ y ≤ {LANE_Y_MAX} m)")
+              f"({LANE_Y_MIN} ≤ y ≤ {LANE_Y_MAX} m)")
         print(f"         y range in east arm = "
-              f"[{metrics['y_in_east_min']:.2f}, {metrics['y_in_east_max']:.2f}] m")
+              f"[{metrics['y_east_min']:.2f}, {metrics['y_east_max']:.2f}] m")
 
-    # Check 3: does not mount kerb (y > -7) during turn
-    if math.isnan(metrics["min_y_during_turn"]):
-        print(f"\n  [SKIP] Kerb check: no turning phase recorded")
+    if math.isnan(metrics["min_y_maneuver"]):
+        print(f"\n  [SKIP] Kerb check: no maneuver phase recorded")
     else:
-        ok3 = metrics["min_y_during_turn"] >= LANE_Y_MIN
-        if not ok3:
-            all_pass = False
-        print(f"\n  [{'PASS' if ok3 else 'FAIL'}] Stays within road during turn "
-              f"(y ≥ {LANE_Y_MIN} m)")
-        print(f"         min y during turn = {metrics['min_y_during_turn']:.2f} m")
+        ok3 = metrics["min_y_maneuver"] >= LANE_Y_MIN
+        ok  = ok and ok3
+        print(f"\n  [{'PASS' if ok3 else 'FAIL'}] Stays within road (y ≥ {LANE_Y_MIN} m)")
+        print(f"         min y during maneuver = {metrics['min_y_maneuver']:.2f} m")
 
-    return all_pass
+    return ok
 
 
-# ── CSV ─────────────────────────────────────────────────────────────────────────
+# ── CSV ────────────────────────────────────────────────────────────────────────
 
 def save_csv(data: dict) -> None:
     CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     rows = np.column_stack([
-        data["time_s"],
-        data["x_m"],
-        data["y_m"],
-        data["speed_ms"],
-        data["speed_ms"] * 3.6,
-        data["accel_lon_ms2"],
-        data["accel_lat_ms2"],
-        data["steer_angle_rad"],
+        data["time_s"], data["x_m"], data["y_m"],
+        data["speed_ms"], data["speed_ms"] * 3.6,
+        data["accel_lon_ms2"], data["accel_lat_ms2"], data["steer_angle_rad"],
     ])
-    np.savetxt(
-        CSV_PATH, rows, delimiter=",",
-        header="time_s,x_m,y_m,speed_ms,speed_kph,accel_lon_ms2,accel_lat_ms2,steer_angle_rad",
-        comments="",
-    )
+    np.savetxt(CSV_PATH, rows, delimiter=",",
+               header="time_s,x_m,y_m,speed_ms,speed_kph,"
+                      "accel_lon_ms2,accel_lat_ms2,steer_angle_rad",
+               comments="")
     print(f"\n  CSV saved → {CSV_PATH}")
 
 
-# ── Entry point ─────────────────────────────────────────────────────────────────
+# ── Entry point ────────────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Scenario 2: Right-turn junction traversal (south → east)")
+        description="Scenario 2: Right-turn junction traversal (Pure Pursuit)")
     parser.add_argument("--viewer", action="store_true", default=False,
                         help="Open the MuJoCo viewer during simulation")
     args = parser.parse_args()
@@ -353,20 +312,20 @@ def main() -> None:
     print("=" * 70)
     print("  Scenario 2 — Right Turn at Junction (South → East)")
     print("=" * 70)
-    print(f"  Scene:        {SCENE_PATH}")
-    print(f"  Model:        {MODEL_PATH}")
-    print(f"  Spawn:        x={NORTHBOUND_X} m, y=-35 m, heading=north")
-    print(f"  Turn radius:  {TURN_RADIUS_M} m  "
-          f"(delta={math.degrees(TURN_DELTA_RAD):.1f}°, ctrl={STEER_RIGHT_CTRL:.4f})")
-    print(f"  Viewer:       {'on' if args.viewer else 'off (pass --viewer to enable)'}")
+    print(f"  Scene:       {SCENE_PATH}")
+    print(f"  Model:       {MODEL_PATH}")
+    print(f"  Spawn:       x=1.75 m, y=-35 m, heading=north")
+    print(f"  Arc:         centre ({_ARC_CX}, {_ARC_CY}), R={_ARC_R} m")
+    print(f"  Lookahead:   {LOOKAHEAD_M} m")
+    print(f"  Path pts:    {len(PATH)}")
+    print(f"  Viewer:      {'on' if args.viewer else 'off (pass --viewer to enable)'}")
 
-    for path, label in [(SCENE_PATH, "scene"), (MODEL_PATH, "model")]:
-        if not path.exists():
-            print(f"\n  ERROR: {label} file not found at {path}")
+    for p, label in [(SCENE_PATH, "scene"), (MODEL_PATH, "model")]:
+        if not p.exists():
+            print(f"\n  ERROR: {label} file not found: {p}")
             sys.exit(1)
 
     m = build_model()
-
     print("\n  Running simulation...")
     data    = run_simulation(m, show_viewer=args.viewer)
     metrics = extract_metrics(data)

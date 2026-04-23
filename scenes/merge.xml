@@ -1,0 +1,161 @@
+<mujoco>
+
+  <statistic center="0 -7 0" extent="65" meansize="0.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-20" elevation="-20" ellipsoidinertia="true"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.22 0.32 0.16" rgb2="0.18 0.26 0.12"
+             markrgb="0.28 0.38 0.20" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="25 25" reflectance="0.05"/>
+    <material name="road"          rgba="0.20 0.20 0.20 1"/>
+    <material name="marking_white" rgba="1.00 1.00 1.00 1"/>
+    <material name="marking_yellow" rgba="1.00 0.85 0.00 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 40" dir="0 0 -1" directional="true"
+           diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4"/>
+
+    <!-- Infinite grass/earth ground plane -->
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- ================================================================
+         MAIN ROAD
+         4-lane east-west road, y ∈ [-7, +7], x ∈ [-60, +60]
+    ================================================================ -->
+    <geom name="road_main" type="box" pos="0 0 0.001" size="60 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         EDGE LINES  (solid white, 0.2 m wide)
+    ================================================================ -->
+    <geom name="edge_south" type="box" pos="0 -7 0.002" size="60 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_north" type="box" pos="0  7 0.002" size="60 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         CENTRE DIVIDER  (solid yellow — separates opposing traffic)
+    ================================================================ -->
+    <geom name="centre_divider" type="box" pos="0 0 0.002" size="60 0.1 0.001"
+          material="marking_yellow" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         LANE DIVIDERS  (dashed white, 3 m dash / 3 m gap)
+         Eastbound lane divider : y = -3.5
+         Westbound lane divider : y = +3.5
+         Dashes at x = -57, -51, ..., +57  (step 6, 20 dashes per line)
+    ================================================================ -->
+
+    <!-- Eastbound lane divider (y = -3.5) -->
+    <geom name="dash_E_00" type="box" pos="-57 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_01" type="box" pos="-51 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_02" type="box" pos="-45 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_03" type="box" pos="-39 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_04" type="box" pos="-33 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_05" type="box" pos="-27 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_06" type="box" pos="-21 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_07" type="box" pos="-15 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_08" type="box" pos=" -9 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_09" type="box" pos=" -3 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_10" type="box" pos="  3 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_11" type="box" pos="  9 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_12" type="box" pos=" 15 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_13" type="box" pos=" 21 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_14" type="box" pos=" 27 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_15" type="box" pos=" 33 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_16" type="box" pos=" 39 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_17" type="box" pos=" 45 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_18" type="box" pos=" 51 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_19" type="box" pos=" 57 -3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Westbound lane divider (y = +3.5) -->
+    <geom name="dash_W_00" type="box" pos="-57  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_01" type="box" pos="-51  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_02" type="box" pos="-45  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_03" type="box" pos="-39  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_04" type="box" pos="-33  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_05" type="box" pos="-27  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_06" type="box" pos="-21  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_07" type="box" pos="-15  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_08" type="box" pos=" -9  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_09" type="box" pos=" -3  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_10" type="box" pos="  3  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_11" type="box" pos="  9  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_12" type="box" pos=" 15  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_13" type="box" pos=" 21  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_14" type="box" pos=" 27  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_15" type="box" pos=" 33  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_16" type="box" pos=" 39  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_17" type="box" pos=" 45  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_18" type="box" pos=" 51  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_19" type="box" pos=" 57  3.5 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         ON-RAMP
+         Single-lane road merging from south-east at 20° into the
+         eastbound right lane (y = -1.75).
+
+         Geometry (20° from east, CW from +x axis):
+           Direction vector : (cos20°, sin20°) ≈ (0.940, 0.342)
+           Perpendicular out : (sin20°, -cos20°) ≈ (0.342, -0.940)
+           Merge nose centre : (20, -7)
+           Far-end centre    : (-13, -19)
+           Box centre        : (3.5, -13)   half-length=17.5  euler z=20°
+
+         Lane centre follows the box centre line (single lane = centred).
+         Spawn point (spawn_merging) is 12 m from the far end along the
+         ramp direction, on the centreline.
+    ================================================================ -->
+
+    <geom name="ramp" type="box"
+          pos="3.5 -13 0.001" size="17.5 1.75 0.001" euler="0 0 20"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- Ramp inner edge (left / main-road side)
+         Centre = ramp_centre + 1.75 × (-sin20°, cos20°) = (3.5-0.60, -13+1.64) = (2.9, -11.4) -->
+    <geom name="ramp_edge_inner" type="box"
+          pos="2.9 -11.4 0.002" size="17.5 0.1 0.001" euler="0 0 20"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Ramp outer edge (right / south side)
+         Centre = ramp_centre + 1.75 × (sin20°, -cos20°) = (3.5+0.60, -13-1.64) = (4.1, -14.6) -->
+    <geom name="ramp_edge_outer" type="box"
+          pos="4.1 -14.6 0.002" size="17.5 0.1 0.001" euler="0 0 20"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Yield line at merge nose
+         A dashed white line across the ramp width at the merge point (x≈20, y≈-7).
+         Oriented perpendicular to the ramp (i.e. euler z = 20°+90° = 110°). -->
+    <geom name="yield_line" type="box"
+          pos="19.9 -7.0 0.003" size="0.15 1.75 0.001" euler="0 0 110"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- ================================================================
+         VEHICLE SPAWN FRAMES
+         euler "0 0 θ" rotates the vehicle's local +x (forward) by θ degrees
+         in the world xy-plane, so:
+           θ =  0° → facing east  (+x)
+           θ = 20° → facing 20° north-of-east (ramp heading)
+    ================================================================ -->
+
+    <!-- Vehicle 1 — main road, eastbound right lane (the merge target lane) -->
+    <frame name="spawn_main_right" pos="-15 -1.75 0" euler="0 0 0"/>
+
+    <!-- Vehicle 2 — main road, eastbound left lane -->
+    <frame name="spawn_main_left"  pos="-25 -5.25 0" euler="0 0 0"/>
+
+    <!-- Vehicle 3 — on-ramp, heading toward merge nose -->
+    <frame name="spawn_merging"    pos="-2 -15 0"    euler="0 0 20"/>
+
+  </worldbody>
+</mujoco>
