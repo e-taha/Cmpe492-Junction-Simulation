@@ -1,6 +1,9 @@
 <mujoco model="simple_car">
   <option gravity="0 0 -9.81" timestep="0.005"/>
-
+  <compiler meshdir="meshes/" />
+  <asset>
+      <mesh name="edgar_body" file="edgar_body_low_2.obj" scale="1 1 1"/>
+  </asset>
   <default>
     <geom contype="1" conaffinity="1" condim="3"/>
     <!-- Edgar steering range from vehicle_parameters_edgar.yaml -->
@@ -32,6 +35,9 @@
       <site name="roof_ref" pos="0 0 0.987" size="0.05" rgba="1 0 0 1"/>
       <geom name="chassis" type="box" size="2.4865 0.9705 0.987"
             rgba="0.2 0.4 0.8 1"/>
+
+      <geom name="chassis_visual" type="mesh"  mesh="edgar_body"
+        contype="0" conaffinity="0" rgba="0.2 0.4 0.8 1"/>
 
       <!-- Front-left wheel -->
       <body name="wheel_fl" pos="1.484 0.8225 -0.987">

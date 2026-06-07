@@ -25,8 +25,9 @@
     <light pos="0 150 40" dir="0 0 -1" directional="true"
            diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4"/>
 
-    <!-- Infinite ground plane -->
-    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <!-- Floor: contype=3 so it collides with both Ego (type=1) and GVT/SOV (type=2) -->
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"
+          contype="3" conaffinity="3"/>
 
     <!-- ================================================================
          STRAIGHT NORTH-SOUTH ROAD
@@ -49,35 +50,19 @@
           material="marking_yellow" contype="0" conaffinity="0"/>
 
     <!-- ================================================================
-         GVT — Global Vehicle Target
-         Oncoming vehicle that performs a head-on lane change cut-in.
-         Initial lane: southbound (x = -1.75 m).
-         Initial position: y = 250 m (far north), heading south.
-         Dimensions: VW Golf-class (4.023 m long, 1.941 m wide).
-         half-lengths: longitudinal=2.0115 m, lateral=0.9705 m, height=0.987 m
+         VEHICLE SPAWN FRAMES
+         euler "0 0  90" → vehicle faces north (+y)  [Ego]
+         euler "0 0 -90" → vehicle faces south (-y)  [GVT, SOV]
     ================================================================ -->
-    <body name="gvt" mocap="true" pos="-1.75 250 1.333" euler="0 0 -90">
-      <geom type="box" size="2.0115 0.9705 0.987"
-            rgba="0.9 0.2 0.1 0.9" contype="0" conaffinity="0"/>
-    </body>
 
-    <!-- ================================================================
-         SOV — Screen Object Vehicle (obstruction)
-         Travels ahead of GVT in the southbound lane at the same speed.
-         Initial position: 24 m south of GVT (freespace ~19.4 m).
-         Larger obstruction vehicle: 5 m long, 2 m wide.
-    ================================================================ -->
-    <body name="sov" mocap="true" pos="-1.75 226 1.5" euler="0 0 -90">
-      <geom type="box" size="2.5 1.0 1.0"
-            rgba="0.9 0.55 0.1 0.9" contype="0" conaffinity="0"/>
-    </body>
+    <!-- Ego: northbound right lane, heading north -->
+    <frame name="spawn_ego" pos="1.75 0 0"   euler="0 0 90"/>
 
-    <!-- ================================================================
-         EGO SPAWN FRAME
-         Northbound lane centre, heading north.
-         euler "0 0 90" rotates vehicle local +x → world +y (north).
-    ================================================================ -->
-    <frame name="spawn_ego" pos="1.75 0 0" euler="0 0 90"/>
+    <!-- GVT: southbound left lane, heading south, far north -->
+    <frame name="spawn_gvt" pos="-1.75 250 0" euler="0 0 -90"/>
+
+    <!-- SOV: southbound left lane, heading south, 24 m ahead of GVT -->
+    <frame name="spawn_sov" pos="-1.75 226 0" euler="0 0 -90"/>
 
   </worldbody>
 
