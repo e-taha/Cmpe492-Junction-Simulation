@@ -2,10 +2,13 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import time
+from pathlib import Path
 
-scene_spec = mujoco.MjSpec.from_file("../scenes/junction.xml")
+ROOT = Path(__file__).resolve().parent.parent
 
-robot_spec = mujoco.MjSpec.from_file("../models/simple_car.xml")
+scene_spec = mujoco.MjSpec.from_file(str(ROOT / "scenes/junction.xml"))
+
+robot_spec = mujoco.MjSpec.from_file(str(ROOT / "models/simple_car.xml"))
 
 scene_spec.attach(robot_spec, frame="world", prefix="robot-")
 
@@ -25,6 +28,11 @@ acc_adr    = int(m.sensor_adr[acc_id])
 fl_qpos_adr = int(m.jnt_qposadr[fl_jnt_id])
 fr_qpos_adr = int(m.jnt_qposadr[fr_jnt_id])
 
+# Mesh offset tuning: find the chassis_visual geom and track its offset
+mesh_geom_id   = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "robot-chassis_visual")
+mesh_offset    = m.geom_pos[mesh_geom_id].copy()  # starts at whatever is in the model
+OFFSET_STEP    = 0.05  # metres per keypress
+
 
 # Pressing SPACE key toggles the paused state.
 def mujoco_viewer_callback(keycode):
@@ -43,40 +51,59 @@ def step():
     steering_link_deg = float(np.degrees(steering_link_rad))
 
     viewer.user_scn.ngeom = 0
-    geom = viewer.user_scn.geoms[0]
     label_pos = d.xpos[chassis_id].copy()
-    label_pos[2] += 3.0
-    mujoco.mjv_initGeom(
-        geom,
-        mujoco.mjtGeom.mjGEOM_LABEL,
-        np.zeros(3),
-        label_pos,
-        np.eye(3).flatten(),
-        np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32),
-    )
-    geom.label = (
-        f"t={d.time:.1f}s  "
-        f"v={speed * 3.6:.1f} km/h  "
-        f"a={accel:.2f} m/s2  "
-        f"FL={fl_deg:.1f}deg  FR={fr_deg:.1f}deg  "
-        f"Steering={steering_link_deg:.1f}deg"
-    )
-    viewer.user_scn.ngeom = 1
+
+    geom0 = viewer.user_scn.geoms[0]
+    pos0 = label_pos.copy(); pos0[2] += 3.5
+    mujoco.mjv_initGeom(geom0, mujoco.mjtGeom.mjGEOM_LABEL, np.zeros(3),
+                        pos0, np.eye(3).flatten(),
+                        np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32))
+    geom0.label = (f"t={d.time:.1f}s v={speed*3.6:.1f}km/h a={accel:.2f}m/s2"
+                   f" FL={fl_deg:.1f} FR={fr_deg:.1f} St={steering_link_deg:.1f}deg")
+
+    ox, oy, oz = mesh_offset
+    geom1 = viewer.user_scn.geoms[1]
+    pos1 = label_pos.copy(); pos1[2] += 2.8
+    mujoco.mjv_initGeom(geom1, mujoco.mjtGeom.mjGEOM_LABEL, np.zeros(3),
+                        pos1, np.eye(3).flatten(),
+                        np.array([0.0, 1.0, 1.0, 1.0], dtype=np.float32))
+    geom1.label = f"mesh x={ox:.3f} y={oy:.3f} z={oz:.3f} [W/S=X A/D=Y Q/E=Z]"
+
+    viewer.user_scn.ngeom = 2
 
     viewer.sync()
     time.sleep(m.opt.timestep)
 
 def key_callback(keycode):
+    global mesh_offset
     print(f"Key pressed: {keycode}")
-    if keycode == 265:  # Use up arrow key to increase throttle
-        d.ctrl[1] += 0.1  # Increase throttle control signal
-    elif keycode == 264:  # Use down arrow key to decrease throttle
-        d.ctrl[1] -= 0.1  # Decrease throttle control signal
-    elif keycode == 262:  # Use right arrow key to increase steering angle
-        d.ctrl[0] += np.radians(10)  # +10° per keypress
-    elif keycode == 263:  # Use left arrow key to decrease steering angle
-        d.ctrl[0] -= np.radians(10)  # -10° per keypress
-    print(f"Control signals: throttle={d.ctrl[1]}, steering={d.ctrl[0]}")
+    if keycode == 265:  # up arrow → throttle up
+        d.ctrl[1] += 0.1
+    elif keycode == 264:  # down arrow → throttle down
+        d.ctrl[1] -= 0.1
+    elif keycode == 262:  # right arrow → steer right
+        d.ctrl[0] += np.radians(10)
+    elif keycode == 263:  # left arrow → steer left
+        d.ctrl[0] -= np.radians(10)
+    # Mesh offset tuning (W/S = X, A/D = Y, Q/E = Z)
+    elif keycode == ord('W'):
+        mesh_offset[0] += OFFSET_STEP
+    elif keycode == ord('S'):
+        mesh_offset[0] -= OFFSET_STEP
+    elif keycode == ord('D'):
+        mesh_offset[1] += OFFSET_STEP
+    elif keycode == ord('A'):
+        mesh_offset[1] -= OFFSET_STEP
+    elif keycode == ord('E'):
+        mesh_offset[2] += OFFSET_STEP
+    elif keycode == ord('Q'):
+        mesh_offset[2] -= OFFSET_STEP
+    else:
+        print(f"Control signals: throttle={d.ctrl[1]}, steering={d.ctrl[0]}")
+        return
+    # Apply offset to model geom so the viewer picks it up immediately
+    m.geom_pos[mesh_geom_id] = mesh_offset
+    print(f"mesh_offset → x={mesh_offset[0]:.3f}  y={mesh_offset[1]:.3f}  z={mesh_offset[2]:.3f}")
 
 with mujoco.viewer.launch_passive(m, d, key_callback=key_callback) as viewer:
     while viewer.is_running():

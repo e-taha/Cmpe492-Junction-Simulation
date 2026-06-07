@@ -34,9 +34,10 @@
       <!-- Reference marker at roof height (2.32m above ground = 0.987m above CG) -->
       <site name="roof_ref" pos="0 0 0.987" size="0.05" rgba="1 0 0 1"/>
       <geom name="chassis" type="box" size="2.4865 0.9705 0.987"
-            rgba="0.2 0.4 0.8 1"/>
+            rgba="0.2 0.4 0.8 0"/>
 
       <geom name="chassis_visual" type="mesh"  mesh="edgar_body"
+        pos="-1.6 0.000 -1.4"
         contype="0" conaffinity="0" rgba="0.2 0.4 0.8 1"/>
 
       <!-- Front-left wheel -->
