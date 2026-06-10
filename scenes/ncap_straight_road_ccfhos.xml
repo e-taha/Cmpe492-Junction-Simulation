@@ -1,0 +1,53 @@
+<mujoco>
+
+  <!-- CCFhos: 2 cars head-on in the same lane (x=1.75).
+       Ego at y=0 heading north; GVT at y=311 heading south. -->
+  <statistic center="1.75 155 0" extent="200" meansize="1.0"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-20" elevation="-20" ellipsoidinertia="true"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.22 0.32 0.16" rgb2="0.18 0.26 0.12"
+             markrgb="0.28 0.38 0.20" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="25 25" reflectance="0.05"/>
+    <material name="road"           rgba="0.20 0.20 0.20 1"/>
+    <material name="marking_white"  rgba="1.00 1.00 1.00 1"/>
+    <material name="marking_yellow" rgba="1.00 0.85 0.00 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 155 40" dir="0 0 -1" directional="true"
+           diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4"/>
+
+    <!-- Floor: contype=3 so it collides with both Ego (type=1) and GVT (type=2) -->
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"
+          contype="3" conaffinity="3"/>
+
+    <!-- Straight north-south road, two lanes 3.5 m each, y=-30 to y=350 -->
+    <geom name="road" type="box" pos="0 160 0.001" size="3.5 190 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <geom name="edge_east"  type="box" pos=" 3.5 160 0.002" size="0.1 190 0.001"
+          material="marking_white"  contype="0" conaffinity="0"/>
+    <geom name="edge_west"  type="box" pos="-3.5 160 0.002" size="0.1 190 0.001"
+          material="marking_white"  contype="0" conaffinity="0"/>
+    <geom name="centre_divider" type="box" pos="0 160 0.002" size="0.1 190 0.001"
+          material="marking_yellow" contype="0" conaffinity="0"/>
+
+    <!-- Ego: northbound right lane, heading north -->
+    <frame name="spawn_ego" pos="1.75 0 0"   euler="0 0 90"/>
+
+    <!-- GVT: SAME lane as Ego (x=1.75), heading SOUTH — head-on collision -->
+    <frame name="spawn_gvt" pos="1.75 311 0" euler="0 0 -90"/>
+
+  </worldbody>
+
+</mujoco>

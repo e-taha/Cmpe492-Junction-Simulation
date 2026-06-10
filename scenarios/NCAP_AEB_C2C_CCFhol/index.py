@@ -67,6 +67,7 @@ ROOT_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 from pure_pursuit import (PurePursuit, straight_segment, arc_segment,
                           make_path, heading_from_xmat, draw_path_geoms)
+from props import add_roadside_props
 
 # ── File paths ─────────────────────────────────────────────────────────────────
 SCENE_PATH  = ROOT_DIR / "scenes" / "ncap_straight_road.xml"
@@ -168,6 +169,8 @@ def build_model() -> mujoco.MjModel:
     spec_ego   = mujoco.MjSpec.from_file(str(MODEL_PATH))
     spec_gvt   = mujoco.MjSpec.from_file(str(MODEL_PATH))
     spec_sov   = mujoco.MjSpec.from_file(str(MODEL_PATH))
+
+    add_roadside_props(scene_spec, y_min=-10.0, y_max=260.0, seed=7)
 
     scene_spec.attach(spec_ego, frame="spawn_ego", prefix="ego-")
     scene_spec.attach(spec_gvt, frame="spawn_gvt", prefix="gvt-")

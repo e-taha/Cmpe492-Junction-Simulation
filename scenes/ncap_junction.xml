@@ -1,0 +1,135 @@
+<mujoco>
+  <!-- Extended 4-way junction for NCAP CCFtap (Turning Across Path).
+       Arms extend ±67 m (was ±47 m) to accommodate the scenario timing.
+       Layout:
+         N-S road: northbound x=+1.75, southbound x=-1.75
+         E-W road: eastbound  y=-1.75, westbound  y=+1.75
+       Ego:    south arm (x=+1.75, y=-20), heading north, turns LEFT at junction.
+       Target: north arm (x=-1.75, y=+63), heading south, goes straight. -->
+
+  <statistic center="0 20 0" extent="70" meansize="0.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-20" elevation="-20" ellipsoidinertia="true"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.22 0.32 0.16" rgb2="0.18 0.26 0.12"
+             markrgb="0.28 0.38 0.20" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="25 25" reflectance="0.05"/>
+    <material name="road"          rgba="0.20 0.20 0.20 1"/>
+    <material name="marking_white" rgba="1.00 1.00 1.00 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 20 40" dir="0 0 -1" directional="true"
+           diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4"/>
+
+    <!-- Floor: contype=3 collides with Ego (type=1) and Target (type=2) -->
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"
+          contype="3" conaffinity="3"/>
+
+    <!-- Junction centre box ±7 m -->
+    <geom name="road_center" type="box" pos="0 0 0.001" size="7 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- North arm: y 7→67 (extended from 47 to 67) -->
+    <geom name="road_north" type="box" pos="0 37 0.001" size="7 30 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- South arm: y -67→-7 -->
+    <geom name="road_south" type="box" pos="0 -37 0.001" size="7 30 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- East arm: x 7→67 -->
+    <geom name="road_east" type="box" pos="37 0 0.001" size="30 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- West arm: x -67→-7 -->
+    <geom name="road_west" type="box" pos="-37 0 0.001" size="30 7 0.001"
+          material="road" contype="0" conaffinity="0"/>
+
+    <!-- Edge lines — North arm -->
+    <geom name="edge_north_W" type="box" pos="-7  37 0.002" size="0.1 30 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_north_E" type="box" pos=" 7  37 0.002" size="0.1 30 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <!-- South arm -->
+    <geom name="edge_south_W" type="box" pos="-7 -37 0.002" size="0.1 30 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_south_E" type="box" pos=" 7 -37 0.002" size="0.1 30 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <!-- East arm -->
+    <geom name="edge_east_N" type="box" pos=" 37  7 0.002" size="30 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_east_S" type="box" pos=" 37 -7 0.002" size="30 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <!-- West arm -->
+    <geom name="edge_west_N" type="box" pos="-37  7 0.002" size="30 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="edge_west_S" type="box" pos="-37 -7 0.002" size="30 0.1 0.001"
+          material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Centre dashes — North arm (y=9 to 63, step 6) -->
+    <geom name="dash_N_0" type="box" pos="0  9 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_1" type="box" pos="0 15 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_2" type="box" pos="0 21 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_3" type="box" pos="0 27 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_4" type="box" pos="0 33 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_5" type="box" pos="0 39 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_6" type="box" pos="0 45 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_7" type="box" pos="0 51 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_8" type="box" pos="0 57 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_N_9" type="box" pos="0 63 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- South arm (y=-9 to -63, step -6) -->
+    <geom name="dash_S_0" type="box" pos="0  -9 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_1" type="box" pos="0 -15 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_2" type="box" pos="0 -21 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_3" type="box" pos="0 -27 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_4" type="box" pos="0 -33 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_5" type="box" pos="0 -39 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_6" type="box" pos="0 -45 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_7" type="box" pos="0 -51 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_8" type="box" pos="0 -57 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_S_9" type="box" pos="0 -63 0.002" size="0.1 1.5 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- East arm (x=9 to 63, step 6) -->
+    <geom name="dash_E_0" type="box" pos=" 9 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_1" type="box" pos="15 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_2" type="box" pos="21 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_3" type="box" pos="27 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_4" type="box" pos="33 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_5" type="box" pos="39 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_6" type="box" pos="45 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_7" type="box" pos="51 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_8" type="box" pos="57 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_E_9" type="box" pos="63 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- West arm (x=-9 to -63, step -6) -->
+    <geom name="dash_W_0" type="box" pos=" -9 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_1" type="box" pos="-15 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_2" type="box" pos="-21 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_3" type="box" pos="-27 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_4" type="box" pos="-33 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_5" type="box" pos="-39 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_6" type="box" pos="-45 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_7" type="box" pos="-51 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_8" type="box" pos="-57 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+    <geom name="dash_W_9" type="box" pos="-63 0 0.002" size="1.5 0.1 0.001" material="marking_white" contype="0" conaffinity="0"/>
+
+    <!-- Ego: south arm northbound lane, heading north, starts y=-20 -->
+    <frame name="spawn_ego"    pos=" 1.75 -20 0" euler="0 0  90"/>
+
+    <!-- Target: north arm southbound lane, heading south, starts y=+63 -->
+    <frame name="spawn_target" pos="-1.75  63 0" euler="0 0 -90"/>
+
+  </worldbody>
+
+</mujoco>
