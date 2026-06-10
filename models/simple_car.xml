@@ -31,9 +31,7 @@
       <inertial pos="0 0 -0.633" mass="2400"
             diaginertia="3500 13000 13600"/>
       <site name="imu" pos="0 0 0"/>
-      <!-- Reference marker at roof height (2.32m above ground = 0.987m above CG) -->
-      <site name="roof_ref" pos="0 0 0.987" size="0.05" rgba="1 0 0 1"/>
-      <geom name="chassis" type="box" size="2.4865 0.9705 0.987"
+<geom name="chassis" type="box" size="2.4865 0.9705 0.987"
             rgba="0.2 0.4 0.8 0"/>
 
       <geom name="chassis_visual" type="mesh"  mesh="edgar_body"

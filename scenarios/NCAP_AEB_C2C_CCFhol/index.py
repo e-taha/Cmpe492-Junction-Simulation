@@ -16,9 +16,9 @@ All three road users are full Edgar vehicles (simple_car.xml):
        Straight path south.  Speed-controlled to 70 km/h.
        Stays 19.4 m freespace ahead of GVT throughout.
 
-Physics collision between GVT/SOV and Ego is disabled via contype bitmasks
-so that the head-on approach does not destabilise the simulation.  A bounding-
-box overlap check provides the "virtual collision" detection.
+Physics collision between all vehicles is enabled.  The floor is set to
+contype=3 so it collides with all vehicles.  An AABB overlap check records
+the first collision time and speed for reporting.
 
 NCAP parameters (from .xosc)
 -----------------------------
@@ -38,13 +38,10 @@ Derived timing  (closing speed = 2 × 19.444 = 38.888 m/s)
 
 Collision safety
 ----------------
-  After compiling the model, all geoms belonging to gvt-* or sov-* bodies are
-  set to contype=2 / conaffinity=2, while Ego geoms remain at contype=1 /
-  conaffinity=1.  The floor is set to contype=3 / conaffinity=3.  This means:
-    floor ↔ Ego  : (3 & 1) > 0  → collide  ✓
-    floor ↔ GVT  : (3 & 2) > 0  → collide  ✓
-    Ego  ↔ GVT   : (1 & 2) = 0  → no physics collision  ✓
-  A bounding-box overlap test reports the virtual collision time/speed.
+  All vehicle geoms use the model default contype=1 / conaffinity=1.
+  The floor is set to contype=3 / conaffinity=3 so it collides with all
+  vehicles.  Ego ↔ GVT/SOV use MuJoCo's contact solver for physical impact.
+  An AABB overlap check records the first collision time/speed for reporting.
 
 Usage
 -----
@@ -178,19 +175,11 @@ def build_model() -> mujoco.MjModel:
 
     m = scene_spec.compile()
 
-    # Assign contype bitmasks so that GVT/SOV do not physically collide with
-    # Ego but still interact with the floor (see module docstring).
+    # Floor collides with all vehicles (contype=3 matches default vehicle contype=1).
     floor_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     if floor_id >= 0:
         m.geom_contype[floor_id]     = 3
         m.geom_conaffinity[floor_id] = 3
-
-    for i in range(m.ngeom):
-        body_id   = int(m.geom_bodyid[i])
-        body_name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, body_id) or ""
-        if body_name.startswith(("gvt-", "sov-")):
-            m.geom_contype[i]     = 2
-            m.geom_conaffinity[i] = 2
 
     return m
 
@@ -269,7 +258,8 @@ def _check_collision(ego_x: float, ego_y: float,
 
 # ── Simulation ─────────────────────────────────────────────────────────────────
 
-def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
+def run_simulation(m: mujoco.MjModel, show_viewer: bool = False,
+                   show_labels: bool = True) -> dict:
     d = mujoco.MjData(m)
     mujoco.mj_resetData(m, d)
 
@@ -318,9 +308,15 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
 
     def _sim_step() -> tuple:
         """Advance all three vehicles by one timestep. Returns (gvt_x, gvt_y)."""
-        _step_vehicle(m, d, ids_ego, tracker_ego, EGO_SPEED_MS)
-        _step_vehicle(m, d, ids_gvt, tracker_gvt, GVT_SPEED_MS)
-        _step_vehicle(m, d, ids_sov, tracker_sov, GVT_SPEED_MS)
+        if collision_time is None:
+            _step_vehicle(m, d, ids_ego, tracker_ego, EGO_SPEED_MS)
+            _step_vehicle(m, d, ids_gvt, tracker_gvt, GVT_SPEED_MS)
+            _step_vehicle(m, d, ids_sov, tracker_sov, GVT_SPEED_MS)
+        else:
+            for ids_v in (ids_ego, ids_gvt, ids_sov):
+                d.ctrl[ids_v["throttle"]] = 0.0
+                d.ctrl[ids_v["brake"]]    = 0.0
+                d.ctrl[ids_v["steering"]] = 0.0
         mujoco.mj_step(m, d)
         gvt_pos = d.xpos[ids_gvt["chassis"]]
         return float(gvt_pos[0]), float(gvt_pos[1])
@@ -340,44 +336,45 @@ def run_simulation(m: mujoco.MjModel, show_viewer: bool = False) -> dict:
                     collision_time  = d.time
                     collision_speed = ego_speeds[-1]
 
-                # Draw all three paths using the persistent trackers
                 geom_idx = 0
-                for (ids_v, tracker, path, color, name) in [
-                    (ids_ego, tracker_ego, PATH_EGO, COLOR_EGO, "Ego"),
-                    (ids_gvt, tracker_gvt, PATH_GVT, COLOR_GVT, "GVT"),
-                    (ids_sov, tracker_sov, PATH_SOV, COLOR_SOV, "SOV"),
-                ]:
-                    cx  = float(d.xpos[ids_v["chassis"]][0])
-                    cy  = float(d.xpos[ids_v["chassis"]][1])
-                    lp  = tracker.lookahead_point(cx, cy)
-                    lbl = d.xpos[ids_v["chassis"]].copy(); lbl[2] += 3.5
-                    vel_a   = int(m.sensor_adr[ids_v["vel"]])
-                    vx      = float(d.sensordata[vel_a])
-                    vy2     = float(d.sensordata[vel_a + 1])
-                    spd_kph = math.sqrt(vx**2 + vy2**2) * 3.6
-                    geom_idx = draw_path_geoms(
-                        viewer, path, color=color,
-                        lookahead_xy=lp, label_pos=lbl,
-                        label_text=f"{name} {spd_kph:.0f}km/h",
-                        start_idx=geom_idx,
-                    )
+                if show_labels:
+                    # Draw all three paths using the persistent trackers
+                    for (ids_v, tracker, path, color, name) in [
+                        (ids_ego, tracker_ego, PATH_EGO, COLOR_EGO, "Ego"),
+                        (ids_gvt, tracker_gvt, PATH_GVT, COLOR_GVT, "GVT"),
+                        (ids_sov, tracker_sov, PATH_SOV, COLOR_SOV, "SOV"),
+                    ]:
+                        cx  = float(d.xpos[ids_v["chassis"]][0])
+                        cy  = float(d.xpos[ids_v["chassis"]][1])
+                        lp  = tracker.lookahead_point(cx, cy)
+                        lbl = d.xpos[ids_v["chassis"]].copy(); lbl[2] += 3.5
+                        vel_a   = int(m.sensor_adr[ids_v["vel"]])
+                        vx      = float(d.sensordata[vel_a])
+                        vy2     = float(d.sensordata[vel_a + 1])
+                        spd_kph = math.sqrt(vx**2 + vy2**2) * 3.6
+                        geom_idx = draw_path_geoms(
+                            viewer, path, color=color,
+                            lookahead_xy=lp, label_pos=lbl,
+                            label_text=f"{name} {spd_kph:.0f}km/h",
+                            start_idx=geom_idx,
+                        )
 
-                # Add collision/TTC overlay on Ego label position
-                gap  = gvt_y - ey
-                ttc  = gap / CLOSING_SPEED_MS if gap > 0 else 0.0
-                gvt_in_lane = gvt_x > 0.0
-                if geom_idx < viewer.user_scn.maxgeom:
-                    import mujoco as _mj
-                    lbl_pos = d.xpos[ids_ego["chassis"]].copy(); lbl_pos[2] += 6.0
-                    g = viewer.user_scn.geoms[geom_idx]
-                    _mj.mjv_initGeom(g, _mj.mjtGeom.mjGEOM_LABEL,
-                                     np.zeros(3), np.asarray(lbl_pos),
-                                     np.eye(3).flatten(),
-                                     np.array([1.,1.,0.,1.], dtype=np.float32))
-                    g.label = (f"gap={gap:.1f}m  TTC={ttc:.2f}s  "
-                               f"GVT={'EGO LANE' if gvt_in_lane else 'adj lane'}  "
-                               f"{'*** COLLISION ***' if collided else ''}")
-                    geom_idx += 1
+                    # Collision/TTC overlay
+                    gap  = gvt_y - ey
+                    ttc  = gap / CLOSING_SPEED_MS if gap > 0 else 0.0
+                    gvt_in_lane = gvt_x > 0.0
+                    if geom_idx < viewer.user_scn.maxgeom:
+                        import mujoco as _mj
+                        lbl_pos = d.xpos[ids_ego["chassis"]].copy(); lbl_pos[2] += 6.0
+                        g = viewer.user_scn.geoms[geom_idx]
+                        _mj.mjv_initGeom(g, _mj.mjtGeom.mjGEOM_LABEL,
+                                         np.zeros(3), np.asarray(lbl_pos),
+                                         np.eye(3).flatten(),
+                                         np.array([1.,1.,0.,1.], dtype=np.float32))
+                        g.label = (f"gap={gap:.1f}m  TTC={ttc:.2f}s  "
+                                   f"GVT={'EGO LANE' if gvt_in_lane else 'adj lane'}  "
+                                   f"{'*** COLLISION ***' if collided else ''}")
+                        geom_idx += 1
 
                 viewer.user_scn.ngeom = geom_idx
                 viewer.sync()
@@ -516,8 +513,10 @@ def save_csv(data: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="NCAP AEB C2C CCFhol — head-on cut-in, 3 Edgar vehicles")
-    parser.add_argument("--viewer", action="store_true", default=False,
+    parser.add_argument("--viewer",   action="store_true", default=False,
                         help="Open MuJoCo viewer during simulation")
+    parser.add_argument("--no-label", action="store_true", default=False,
+                        help="Hide speed/TTC overlays in the viewer")
     args = parser.parse_args()
 
     print("=" * 70)
@@ -543,7 +542,8 @@ def main() -> None:
 
     m = build_model()
     print("\n  Running simulation...")
-    data    = run_simulation(m, show_viewer=args.viewer)
+    data    = run_simulation(m, show_viewer=args.viewer,
+                             show_labels=not args.no_label)
     metrics = extract_metrics(data)
     ok      = print_report(metrics)
     save_csv(data)

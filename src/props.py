@@ -181,3 +181,83 @@ def add_roadside_props(
                 _add_speed_sign(wb, f"sign_{side_tag}_{i}", x, y)
             else:
                 _add_warning_sign(wb, f"sign_{side_tag}_{i}", x, y)
+
+
+def add_junction_props(
+    spec: mujoco.MjSpec,
+    seed: int = 42,
+    road_half: float = 7.0,
+    arm_len: float = 60.0,
+) -> None:
+    """
+    Scatter trees and road signs around a 4-way junction scene.
+
+    Trees fill the four corner quadrants (between road arms) and line the
+    outer edges of each arm.  Signs are placed along the south arm (Ego
+    approach) and north arm (Target approach).
+
+    Parameters
+    ----------
+    spec      : MjSpec to modify (before compile)
+    seed      : RNG seed
+    road_half : half-width of each road arm in metres (default 7 m)
+    arm_len   : length of each road arm beyond the junction box (default 60 m)
+    """
+    rng = np.random.default_rng(seed)
+    wb  = spec.worldbody
+    r   = road_half
+    lo  = r + 1.5      # inner edge of tree/sign band
+    hi  = r + 6.0      # outer edge of tree/sign band
+
+    # ── Corner quadrant trees (fills the "open land" between arms) ─────────────
+    for sx, sy, ctag in [(+1, +1, "NE"), (-1, +1, "NW"),
+                          (-1, -1, "SW"), (+1, -1, "SE")]:
+        for i in range(8):
+            x = sx * float(rng.uniform(r + 1.5, r + 22.0))
+            y = sy * float(rng.uniform(r + 1.5, r + 22.0))
+            _add_tree(wb, f"tree_c{ctag}_{i}", x, y,
+                      float(rng.uniform(0.10, 0.16)),
+                      float(rng.uniform(1.0,  1.8)),
+                      float(rng.uniform(0.40, 0.65)))
+
+    # ── Trees along North / South arm outer edges ──────────────────────────────
+    for sy, atag in [(+1, "N"), (-1, "S")]:
+        for sx, stag in [(+1, "E"), (-1, "W")]:
+            base_ys = np.linspace(r + 4.0, arm_len - 4.0, 9)
+            for i, base_y in enumerate(base_ys):
+                y = sy * float(base_y + rng.uniform(-2.5, 2.5))
+                x = sx * float(rng.uniform(lo, hi))
+                _add_tree(wb, f"tree_ns{atag}{stag}_{i}", x, y,
+                          float(rng.uniform(0.10, 0.15)),
+                          float(rng.uniform(1.0,  1.7)),
+                          float(rng.uniform(0.40, 0.60)))
+
+    # ── Trees along East / West arm outer edges ────────────────────────────────
+    for sx, atag in [(+1, "E"), (-1, "W")]:
+        for sy, stag in [(+1, "N"), (-1, "S")]:
+            base_xs = np.linspace(r + 4.0, arm_len - 4.0, 7)
+            for i, base_x in enumerate(base_xs):
+                x = sx * float(base_x + rng.uniform(-2.5, 2.5))
+                y = sy * float(rng.uniform(lo, hi))
+                _add_tree(wb, f"tree_ew{atag}{stag}_{i}", x, y,
+                          float(rng.uniform(0.10, 0.15)),
+                          float(rng.uniform(1.0,  1.7)),
+                          float(rng.uniform(0.40, 0.60)))
+
+    # ── Signs along South arm (Ego approach) — east side ──────────────────────
+    for i, base_y in enumerate(np.linspace(-arm_len + 10.0, -r - 4.0, 4)):
+        y = float(base_y + rng.uniform(-3.0, 3.0))
+        x = float(rng.uniform(r + 1.0, r + 3.5))
+        if i % 2 == 0:
+            _add_speed_sign(wb, f"sign_SE_{i}", x, y)
+        else:
+            _add_warning_sign(wb, f"sign_SE_{i}", x, y)
+
+    # ── Signs along North arm (Target approach) — west side ───────────────────
+    for i, base_y in enumerate(np.linspace(r + 4.0, arm_len - 10.0, 4)):
+        y = float(base_y + rng.uniform(-3.0, 3.0))
+        x = -float(rng.uniform(r + 1.0, r + 3.5))
+        if i % 2 == 0:
+            _add_speed_sign(wb, f"sign_NW_{i}", x, y)
+        else:
+            _add_warning_sign(wb, f"sign_NW_{i}", x, y)
